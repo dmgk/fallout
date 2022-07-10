@@ -8,23 +8,16 @@ import (
 	"github.com/dmgk/getopt"
 )
 
-type cmd struct {
-	Name    string
-	Summary string
-	run     func(args []string) int
-}
-
-var cmds = []cmd{
-	fetchCmd,
-	grepCmd,
-}
-
 var usageTmpl = template.Must(template.New("usage").Parse(`
 Usage: {{.progname}} [-hv] command [options]
 
 Download and search fallout logs.
 
-Commands (pass -h for command help) :{{range .cmds}}
+Options:
+  -h       show help and exit
+  -v       show version and exit
+
+Commands (pass -h for command help):{{range .cmds}}
   {{.Name | printf "%-8s"}} {{.Summary}}{{end}}
 `[1:]))
 
@@ -54,6 +47,17 @@ func errExit(format string, v ...any) {
 	os.Exit(1)
 }
 
+type command struct {
+	Name    string
+	Summary string
+	run     func(args []string) int
+}
+
+var cmds = []*command{
+	&fetchCmd,
+	&grepCmd,
+}
+
 func main() {
 	opts, err := getopt.New("hv")
 	if err != nil {
@@ -80,9 +84,22 @@ func main() {
 	}
 
 	args := opts.Args()
-
 	if len(args) == 0 {
 		showUsage()
 		os.Exit(1)
 	}
+
+	var cmd *command
+	for _, c := range cmds {
+		if c.Name == args[0] {
+			cmd = c
+			break
+		}
+	}
+	if cmd == nil {
+		showUsage()
+		os.Exit(1)
+	}
+
+	os.Exit(cmd.run(args))
 }

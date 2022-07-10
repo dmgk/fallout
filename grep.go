@@ -1,6 +1,6 @@
 package main
 
-var grepCmd = cmd{
+var grepCmd = command{
 	Name:    "grep",
 	Summary: "search fallout logs",
 	run:     runGrep,
