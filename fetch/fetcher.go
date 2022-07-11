@@ -6,9 +6,6 @@ import (
 	"time"
 )
 
-type QueryFunc func(res *Result) bool
-type ResultFunc func(res *Result, err error) error
-
 type Fetcher interface {
 	Fetch(options *Options, qfn QueryFunc, rfn ResultFunc) error
 }
@@ -17,6 +14,9 @@ type Options struct {
 	After time.Time
 	Limit int
 }
+
+type QueryFunc func(res *Result) bool
+type ResultFunc func(res *Result, err error) error
 
 type Result struct {
 	Builder   string

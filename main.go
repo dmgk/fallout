@@ -9,16 +9,16 @@ import (
 )
 
 var usageTmpl = template.Must(template.New("usage").Parse(`
-Usage: {{.progname}} [-hv] command [options]
+usage: {{.progname}} [-hv] command [options]
 
 Download and search fallout logs.
 
 Options:
-  -h       show help and exit
-  -v       show version and exit
+  -h          show help and exit
+  -v          show version and exit
 
 Commands (pass -h for command help):{{range .cmds}}
-  {{.Name | printf "%-8s"}} {{.Summary}}{{end}}
+  {{.Name | printf "%-11s"}} {{.Summary}}{{end}}
 `[1:]))
 
 var (

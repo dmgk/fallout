@@ -11,16 +11,16 @@ import (
 	"github.com/dmgk/getopt"
 )
 
-var fetchUsageTmpl = template.Must(template.New("usage").Parse(`
-Usage: {{.progname}} fetch [-h] [-d DAYS] [-a DATE] [-n N]
+var fetchUsageTmpl = template.Must(template.New("usage-fetch").Parse(`
+usage: {{.progname}} fetch [-h] [-d days] [-a date] [-n count]
 
 Download and cache fallout logs.
 
 Options:
-  -h       show help and exit
-  -d DAYS  download logs for the last DAYS days (default: {{.daysLimit}})
-  -a DATE  download only logs after this DATE, in RFC-3339 format (default: {{.dateLimit.Format .dateFormat}})
-  -n N     download only recent N logs
+  -h          show help and exit
+  -d days     download logs for the last days (default: {{.daysLimit}})
+  -a date     download only logs after this date, in RFC-3339 format (default: {{.dateLimit.Format .dateFormat}})
+  -n count    download only recent count logs
 `[1:]))
 
 var fetchCmd = command{
@@ -96,6 +96,10 @@ func runFetch(args []string) int {
 		errExit("error initializing cache: %s", err)
 	}
 
+	o := &fetch.Options{
+		After: dateLimit,
+		Limit: countLimit,
+	}
 	qfn := func(res *fetch.Result) bool {
 		e := c.Entry(res.Builder, res.Origin, res.Timestamp)
 		if e.Exists() {
@@ -104,7 +108,6 @@ func runFetch(args []string) int {
 		}
 		return false
 	}
-
 	rfn := func(res *fetch.Result, err error) error {
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error: %s\n", err)
@@ -117,10 +120,7 @@ func runFetch(args []string) int {
 	}
 
 	f := fetch.NewMaillist(fmt.Sprintf("%s/%s", progname, version))
-	f.Fetch(&fetch.Options{
-		After: dateLimit,
-		Limit: countLimit,
-	}, qfn, rfn)
+	f.Fetch(o, qfn, rfn)
 
 	return 0
 }

@@ -2,9 +2,11 @@ package cache
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -37,6 +39,126 @@ func DefaultDirectory(subdir string) (Cacher, error) {
 
 func (c *Directory) Path() string {
 	return c.path
+}
+
+var ErrStop = errors.New("stop")
+
+func (c *Directory) Walk(f *Filter, fn WalkFunc) error {
+	pch := make(chan string)
+	ech := make(chan error)
+
+	go c.walkCache(f, pch, ech)
+
+	pok := true
+	for pok {
+		var p string
+		select {
+		case p, pok = <-pch:
+			if pok {
+				if ferr := fn(p, nil); ferr != nil {
+					if ferr == ErrStop {
+						return nil
+					}
+					return ferr
+				}
+			}
+		case err, eok := <-ech:
+			if eok {
+				if ferr := fn("", err); ferr != nil {
+					if ferr == ErrStop {
+						return nil
+					}
+					return ferr
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func valueAllowed(value string, filter []string) bool {
+	if len(filter) == 0 {
+		return true
+	}
+	for _, s := range filter {
+		if strings.Contains(value, s) {
+			return true
+		}
+	}
+	return false
+}
+
+func (f *Filter) builderAllowed(builder string) bool {
+	return valueAllowed(builder, f.Builders)
+}
+
+func (f *Filter) categoryAllowed(category string) bool {
+	return valueAllowed(category, f.Categories)
+}
+
+func (f *Filter) originAllowed(origin string) bool {
+	return valueAllowed(origin, f.Origins)
+}
+
+func (f *Filter) nameAllowed(name string) bool {
+	return valueAllowed(name, f.Names)
+}
+
+func (c *Directory) walkCache(f *Filter, pch chan string, ech chan error) {
+	defer close(pch)
+	defer close(ech)
+
+	dir, err := os.ReadDir(c.path)
+	if err != nil {
+		ech <- err
+		return
+	}
+	for _, d := range dir {
+		if d.IsDir() && f.builderAllowed(d.Name()) {
+			c.walkBuilder(filepath.Join(c.path, d.Name()), f, pch, ech)
+		}
+	}
+}
+
+func (c *Directory) walkBuilder(path string, f *Filter, pch chan string, ech chan error) {
+	dir, err := os.ReadDir(path)
+	if err != nil {
+		ech <- err
+		return
+	}
+	for _, d := range dir {
+		if d.IsDir() && f.categoryAllowed(d.Name()) {
+			c.walkCategory(filepath.Join(path, d.Name()), f, pch, ech)
+		}
+	}
+}
+
+func (c *Directory) walkCategory(path string, f *Filter, pch chan string, ech chan error) {
+	dir, err := os.ReadDir(path)
+	if err != nil {
+		ech <- err
+		return
+	}
+	for _, d := range dir {
+		o := filepath.Base(path) + string(filepath.Separator) + d.Name()
+		if d.IsDir() && f.originAllowed(o) && f.nameAllowed(d.Name()) {
+			c.walkOrigin(filepath.Join(path, d.Name()), f, pch, ech)
+		}
+	}
+}
+
+func (c *Directory) walkOrigin(path string, f *Filter, pch chan string, ech chan error) {
+	dir, err := os.ReadDir(path)
+	if err != nil {
+		ech <- err
+		return
+	}
+	for _, d := range dir {
+		if !d.IsDir() {
+			pch <- filepath.Join(path, d.Name())
+		}
+	}
 }
 
 const (

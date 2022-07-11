@@ -40,20 +40,20 @@ func (f *Maillist) Fetch(options *Options, qfn QueryFunc, rfn ResultFunc) error 
 		select {
 		case res, rok = <-rch:
 			if rok {
-				if rerr := rfn(res, nil); rerr != nil {
-					if rerr == ErrStop {
+				if ferr := rfn(res, nil); ferr != nil {
+					if ferr == ErrStop {
 						return nil
 					}
-					return rerr
+					return ferr
 				}
 			}
 		case err, eok := <-ech:
 			if eok {
-				if rerr := rfn(nil, err); rerr != nil {
-					if rerr == ErrStop {
+				if ferr := rfn(nil, err); ferr != nil {
+					if ferr == ErrStop {
 						return nil
 					}
-					return rerr
+					return ferr
 				}
 			}
 		}
@@ -72,10 +72,8 @@ var (
 // fetchMaillists scrapes fallout logs from pkg-fallout mail list archive pages.
 // NOTE: keep this code non-parallel to avoid spurious 503 Service Unavailable from lists.freebsd.org.
 func (f *Maillist) fetchMaillist(ctx context.Context, options *Options, qfn QueryFunc, rch chan *Result, ech chan error) {
-	var (
-		resMap = map[string]*Result{}
-		count  int
-	)
+	resMap := make(map[string]*Result)
+	count := 0
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
