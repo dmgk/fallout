@@ -6,6 +6,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/dmgk/fallout/cache"
+	"github.com/dmgk/fallout/fetch"
 	"github.com/dmgk/getopt"
 )
 
@@ -28,20 +30,19 @@ var fetchCmd = command{
 }
 
 const (
-	defaultDaysLimit = 30
+	defaultDaysLimit = 7
 	dateFormat       = "2006-01-02"
 )
 
 var (
 	countLimit int
-	daysLimit  = defaultDaysLimit
-	dateLimit  = time.Now().UTC().AddDate(0, 0, -daysLimit)
+	dateLimit  = time.Now().UTC().AddDate(0, 0, -defaultDaysLimit)
 )
 
 func showFetchUsage() {
 	err := fetchUsageTmpl.Execute(os.Stdout, map[string]any{
 		"progname":   progname,
-		"daysLimit":  daysLimit,
+		"daysLimit":  defaultDaysLimit,
 		"dateLimit":  dateLimit,
 		"dateFormat": dateFormat,
 	})
@@ -71,8 +72,7 @@ func runFetch(args []string) int {
 			if err != nil {
 				errExit(err.Error())
 			}
-			daysLimit = v
-			dateLimit = time.Now().UTC().AddDate(0, 0, -daysLimit)
+			dateLimit = time.Now().UTC().AddDate(0, 0, -v)
 		case 'a':
 			t, err := time.Parse(dateFormat, opt.String())
 			if err != nil {
@@ -82,7 +82,6 @@ func runFetch(args []string) int {
 				errExit("date in the future: %s", t.Format(dateFormat))
 			}
 			dateLimit = t
-			daysLimit = int(time.Now().UTC().Sub(dateLimit)/(24*time.Hour) + 1)
 		case 'n':
 			v, err := opt.Int()
 			if err != nil {
@@ -92,18 +91,36 @@ func runFetch(args []string) int {
 		}
 	}
 
-	ch := make(chan *scrapeRes)
-
-	go scrape(ch, 10)
-
-	for r := range ch {
-		if r.err != nil {
-			fmt.Printf("!!!!!> err %#v\n", r.err)
-			continue
-		}
-		fmt.Printf("====> fl {builder: %s, origin: %s, date: %s, text: %d}\n",
-			r.fl.builder, r.fl.origin, r.fl.date, len(r.fl.text))
+	c, err := cache.DefaultDirectory(progname)
+	if err != nil {
+		errExit("error initializing cache: %s", err)
 	}
+
+	qfn := func(res *fetch.Result) bool {
+		e := c.Entry(res.Builder, res.Origin, res.Timestamp)
+		if e.Exists() {
+			fmt.Fprintf(os.Stdout, "%s (cached)\n", res)
+			return true
+		}
+		return false
+	}
+
+	rfn := func(res *fetch.Result, err error) error {
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %s\n", err)
+			return err
+		}
+
+		fmt.Fprintf(os.Stdout, "%s : %d bytes\n", res, len(res.Content))
+		e := c.Entry(res.Builder, res.Origin, res.Timestamp)
+		return e.Put(res.Content)
+	}
+
+	f := fetch.NewMaillist(fmt.Sprintf("%s/%s", progname, version))
+	f.Fetch(&fetch.Options{
+		After: dateLimit,
+		Limit: countLimit,
+	}, qfn, rfn)
 
 	return 0
 }
