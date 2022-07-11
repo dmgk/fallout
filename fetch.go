@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html/template"
 	"os"
+	"sync/atomic"
 	"time"
 
 	"github.com/dmgk/fallout/cache"
@@ -91,23 +92,31 @@ func runFetch(args []string) int {
 		}
 	}
 
-	c, err := cache.DefaultDirectory(progname)
+	var totalCount, newCount uint32
+	c, err := cache.NewDefaultDirectory(progname)
 	if err != nil {
 		errExit("error initializing cache: %s", err)
 	}
 
+	f := fetch.NewMaillist(fmt.Sprintf("%s/%s", progname, version))
 	o := &fetch.Options{
 		After: dateLimit,
 		Limit: countLimit,
 	}
-	qfn := func(res *fetch.Result) bool {
-		e := c.Entry(res.Builder, res.Origin, res.Timestamp)
+
+	qfn := func(res *fetch.Result) (bool, error) {
+		e, err := c.Cache(res.Builder, res.Origin, res.Timestamp)
+		if err != nil {
+			return false, err
+		}
+		atomic.AddUint32(&totalCount, 1)
 		if e.Exists() {
 			fmt.Fprintf(os.Stdout, "%s (cached)\n", res)
-			return true
+			return true, nil
 		}
-		return false
+		return false, nil
 	}
+
 	rfn := func(res *fetch.Result, err error) error {
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error: %s\n", err)
@@ -115,12 +124,23 @@ func runFetch(args []string) int {
 		}
 
 		fmt.Fprintf(os.Stdout, "%s : %d bytes\n", res, len(res.Content))
-		e := c.Entry(res.Builder, res.Origin, res.Timestamp)
-		return e.Put(res.Content)
+		e, err := c.Cache(res.Builder, res.Origin, res.Timestamp)
+		if err != nil {
+			return err
+		}
+		if err := e.Put(res.Content); err != nil {
+			return err
+		}
+		atomic.AddUint32(&newCount, 1)
+
+		return nil
 	}
 
-	f := fetch.NewMaillist(fmt.Sprintf("%s/%s", progname, version))
-	f.Fetch(o, qfn, rfn)
+	if err := f.Fetch(o, qfn, rfn); err != nil {
+		errExit("fetch error: %s", err)
+		return 1
+	}
+	fmt.Printf("Processes %d logs, %d new.\n", totalCount, newCount)
 
 	return 0
 }

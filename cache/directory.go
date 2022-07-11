@@ -1,13 +1,12 @@
 package cache
 
 import (
-	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -29,7 +28,7 @@ func NewDirectory(root, subdir string) (Cacher, error) {
 	}, nil
 }
 
-func DefaultDirectory(subdir string) (Cacher, error) {
+func NewDefaultDirectory(subdir string) (Cacher, error) {
 	root, err := os.UserCacheDir()
 	if err != nil {
 		return nil, err
@@ -37,38 +36,116 @@ func DefaultDirectory(subdir string) (Cacher, error) {
 	return NewDirectory(root, subdir)
 }
 
-func (c *Directory) Path() string {
-	return c.path
+func (c *Directory) Cache(builder, origin string, timestamp time.Time) (Entry, error) {
+	if builder == "" {
+		return nil, errors.New("empty builder")
+	}
+	if origin == "" {
+		return nil, errors.New("empty origin")
+	}
+	if timestamp.IsZero() {
+		return nil, errors.New("zero timestamp")
+	}
+	return DirectoryEntry(filepath.Join(c.path, builder, origin, timestamp.Format(timestampFormat)) + ext), nil
 }
 
-var ErrStop = errors.New("stop")
+// DirectoryEntry implements filesystem Entry.
+type DirectoryEntry string
 
-func (c *Directory) Walk(f *Filter, fn WalkFunc) error {
-	pch := make(chan string)
+const (
+	timestampFormat = "2006-01-02T15:04:05"
+	ext             = ".log"
+)
+
+func (e DirectoryEntry) Exists() bool {
+	fi, err := os.Stat(string(e))
+	return err == nil && fi.Size() > 0
+}
+
+func (e DirectoryEntry) Get() ([]byte, error) {
+	f, err := os.Open(string(e))
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	buf, err := io.ReadAll(f)
+	if err != nil {
+		return nil, err
+	}
+	return buf, nil
+}
+
+func (e DirectoryEntry) Put(buf []byte) error {
+	if err := os.MkdirAll(filepath.Dir(string(e)), 0755); err != nil {
+		return err
+	}
+
+	f, err := os.Create(string(e))
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	_, err = f.Write(buf)
+	return err
+}
+
+func (e DirectoryEntry) Info() (*EntryInfo, error) {
+	parts := strings.Split(string(e), string(filepath.Separator))
+	if len(parts) < 4 {
+		return nil, errors.New("invalid DirectoryEntry")
+	}
+	ts, err := time.Parse(timestampFormat, strings.TrimSuffix(parts[len(parts)-1], ext))
+	if err != nil {
+		return nil, fmt.Errorf("invalid DirectoryEntry timestamp: %s", err)
+	}
+	return &EntryInfo{
+		Builder:   parts[len(parts)-4],
+		Origin:    parts[len(parts)-3] + string(filepath.Separator) + parts[len(parts)-2],
+		Timestamp: ts,
+	}, nil
+}
+
+func (c *Directory) Walker(filter *Filter) Walker {
+	return &DirectoryWalker{
+		path:   c.path,
+		filter: filter,
+	}
+}
+
+// DirectoryWalker implements filesystem cache Walker.
+type DirectoryWalker struct {
+	path   string
+	filter *Filter
+}
+
+func (w *DirectoryWalker) Walk(wfn WalkFunc) error {
+	rch := make(chan Entry)
 	ech := make(chan error)
 
-	go c.walkCache(f, pch, ech)
+	go w.walkCache(rch, ech)
 
-	pok := true
-	for pok {
-		var p string
+	rok := true
+	for rok {
+		var r Entry
 		select {
-		case p, pok = <-pch:
-			if pok {
-				if ferr := fn(p, nil); ferr != nil {
-					if ferr == ErrStop {
+		case r, rok = <-rch:
+			if rok {
+				if werr := wfn(r, nil); werr != nil {
+					if werr == ErrStop {
 						return nil
 					}
-					return ferr
+					return werr
 				}
 			}
 		case err, eok := <-ech:
 			if eok {
-				if ferr := fn("", err); ferr != nil {
-					if ferr == ErrStop {
+				if werr := wfn(nil, err); werr != nil {
+					if werr == ErrStop {
 						return nil
 					}
-					return ferr
+					return werr
 				}
 			}
 		}
@@ -89,52 +166,64 @@ func valueAllowed(value string, filter []string) bool {
 	return false
 }
 
-func (f *Filter) builderAllowed(builder string) bool {
+func builderAllowed(builder string, f *Filter) bool {
+	if f == nil {
+		return true
+	}
 	return valueAllowed(builder, f.Builders)
 }
 
-func (f *Filter) categoryAllowed(category string) bool {
+func categoryAllowed(category string, f *Filter) bool {
+	if f == nil {
+		return true
+	}
 	return valueAllowed(category, f.Categories)
 }
 
-func (f *Filter) originAllowed(origin string) bool {
+func originAllowed(origin string, f *Filter) bool {
+	if f == nil {
+		return true
+	}
 	return valueAllowed(origin, f.Origins)
 }
 
-func (f *Filter) nameAllowed(name string) bool {
+func nameAllowed(name string, f *Filter) bool {
+	if f == nil {
+		return true
+	}
 	return valueAllowed(name, f.Names)
 }
 
-func (c *Directory) walkCache(f *Filter, pch chan string, ech chan error) {
-	defer close(pch)
+func (w *DirectoryWalker) walkCache(rch chan Entry, ech chan error) {
+	defer close(rch)
 	defer close(ech)
 
-	dir, err := os.ReadDir(c.path)
+	dir, err := os.ReadDir(w.path)
 	if err != nil {
 		ech <- err
 		return
 	}
 	for _, d := range dir {
-		if d.IsDir() && f.builderAllowed(d.Name()) {
-			c.walkBuilder(filepath.Join(c.path, d.Name()), f, pch, ech)
+		if d.IsDir() && builderAllowed(d.Name(), w.filter) {
+			w.walkBuilder(filepath.Join(w.path, d.Name()), rch, ech)
 		}
 	}
 }
 
-func (c *Directory) walkBuilder(path string, f *Filter, pch chan string, ech chan error) {
+func (w *DirectoryWalker) walkBuilder(path string, rch chan Entry, ech chan error) {
 	dir, err := os.ReadDir(path)
 	if err != nil {
 		ech <- err
 		return
 	}
 	for _, d := range dir {
-		if d.IsDir() && f.categoryAllowed(d.Name()) {
-			c.walkCategory(filepath.Join(path, d.Name()), f, pch, ech)
+		if d.IsDir() && categoryAllowed(d.Name(), w.filter) {
+			w.walkCategory(filepath.Join(path, d.Name()), rch, ech)
 		}
 	}
 }
 
-func (c *Directory) walkCategory(path string, f *Filter, pch chan string, ech chan error) {
+func (w *DirectoryWalker) walkCategory(path string, rch chan Entry, ech chan error) {
 	dir, err := os.ReadDir(path)
 	if err != nil {
 		ech <- err
@@ -142,13 +231,13 @@ func (c *Directory) walkCategory(path string, f *Filter, pch chan string, ech ch
 	}
 	for _, d := range dir {
 		o := filepath.Base(path) + string(filepath.Separator) + d.Name()
-		if d.IsDir() && f.originAllowed(o) && f.nameAllowed(d.Name()) {
-			c.walkOrigin(filepath.Join(path, d.Name()), f, pch, ech)
+		if d.IsDir() && originAllowed(o, w.filter) && nameAllowed(d.Name(), w.filter) {
+			w.walkOrigin(filepath.Join(path, d.Name()), rch, ech)
 		}
 	}
 }
 
-func (c *Directory) walkOrigin(path string, f *Filter, pch chan string, ech chan error) {
+func (w *DirectoryWalker) walkOrigin(path string, rch chan Entry, ech chan error) {
 	dir, err := os.ReadDir(path)
 	if err != nil {
 		ech <- err
@@ -156,74 +245,7 @@ func (c *Directory) walkOrigin(path string, f *Filter, pch chan string, ech chan
 	}
 	for _, d := range dir {
 		if !d.IsDir() {
-			pch <- filepath.Join(path, d.Name())
+			rch <- DirectoryEntry(filepath.Join(path, d.Name()))
 		}
 	}
-}
-
-const (
-	timestampFormat = "2006-01-02T15:04:05"
-	ext             = ".log"
-)
-
-type DirectoryEntry string
-
-func (c *Directory) Entry(builder, origin string, timestamp time.Time) Entry {
-	return DirectoryEntry(filepath.Join(c.path, builder, origin, timestamp.Format(timestampFormat)) + ext)
-}
-
-func (e DirectoryEntry) Exists() bool {
-	fi, err := os.Stat(string(e))
-	return err == nil && fi.Size() > 0
-}
-
-func (e DirectoryEntry) Get() (string, error) {
-	f, err := os.Open(string(e))
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-
-	fi, err := f.Stat()
-	if err != nil {
-		return "", err
-	}
-
-	buf := bufGet()
-	buf.Grow(int(fi.Size()) + bytes.MinRead)
-	_, err = buf.ReadFrom(f)
-	if err != nil {
-		return "", err
-	}
-	return buf.String(), nil
-}
-
-func (e DirectoryEntry) Put(content string) error {
-	if err := os.MkdirAll(filepath.Dir(string(e)), 0755); err != nil {
-		return err
-	}
-
-	f, err := os.Create(string(e))
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	_, err = io.WriteString(f, content)
-	return err
-}
-
-var bufPool = sync.Pool{
-	New: func() interface{} {
-		return new(bytes.Buffer)
-	},
-}
-
-func bufGet() *bytes.Buffer {
-	return bufPool.Get().(*bytes.Buffer)
-}
-
-func bufPut(b *bytes.Buffer) {
-	b.Reset()
-	bufPool.Put(b)
 }

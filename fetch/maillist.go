@@ -14,7 +14,7 @@ import (
 
 // Maillist implements Fetcher that scrapes logs from pkg-fallout mail list archives.
 type Maillist struct {
-	c *colly.Collector
+	collector *colly.Collector
 }
 
 func NewMaillist(userAgent string) Fetcher {
@@ -22,7 +22,7 @@ func NewMaillist(userAgent string) Fetcher {
 		colly.UserAgent(userAgent),
 	)
 
-	return &Maillist{c: c}
+	return &Maillist{collector: c}
 }
 
 func (f *Maillist) Fetch(options *Options, qfn QueryFunc, rfn ResultFunc) error {
@@ -40,20 +40,20 @@ func (f *Maillist) Fetch(options *Options, qfn QueryFunc, rfn ResultFunc) error 
 		select {
 		case res, rok = <-rch:
 			if rok {
-				if ferr := rfn(res, nil); ferr != nil {
-					if ferr == ErrStop {
+				if rerr := rfn(res, nil); rerr != nil {
+					if rerr == ErrStop {
 						return nil
 					}
-					return ferr
+					return rerr
 				}
 			}
 		case err, eok := <-ech:
 			if eok {
-				if ferr := rfn(nil, err); ferr != nil {
-					if ferr == ErrStop {
+				if rerr := rfn(nil, err); rerr != nil {
+					if rerr == ErrStop {
 						return nil
 					}
-					return ferr
+					return rerr
 				}
 			}
 		}
@@ -80,7 +80,7 @@ func (f *Maillist) fetchMaillist(ctx context.Context, options *Options, qfn Quer
 	defer close(rch)
 	defer close(ech)
 
-	f.c.OnHTML("tr td:nth-of-type(1) a", func(e *colly.HTMLElement) {
+	f.collector.OnHTML("tr td:nth-of-type(1) a", func(e *colly.HTMLElement) {
 		select {
 		case <-ctx.Done():
 			return
@@ -116,31 +116,36 @@ func (f *Maillist) fetchMaillist(ctx context.Context, options *Options, qfn Quer
 			u.Path = path.Join(u.Path, e.Attr("href"))
 
 			// visit month page and collect fallout log links
-			f.c.Visit(u.String())
+			f.collector.Visit(u.String())
 
 			// process collected partial results
-			var sres []*Result
+			var resSlice []*Result
 			for _, r := range resMap {
-				sres = append(sres, r)
+				resSlice = append(resSlice, r)
 			}
-			sort.Slice(sres, func(i, j int) bool {
+			sort.Slice(resSlice, func(i, j int) bool {
 				// by descending Timestamp
-				return sres[i].Timestamp.After(sres[j].Timestamp)
+				return resSlice[i].Timestamp.After(resSlice[j].Timestamp)
 			})
-			for _, r := range sres {
+			for _, r := range resSlice {
 				if options.Limit > 0 && count > options.Limit {
 					break // limit is reached
 				}
 				// fetch fallout log, unless it was already cached
-				if !qfn(r) {
-					f.c.Visit(r.URL)
+				cached, err := qfn(r)
+				if err != nil {
+					ech <- err
+					continue
+				}
+				if !cached {
+					f.collector.Visit(r.URL)
 				}
 				count++
 			}
 		}
 	})
 
-	f.c.OnHTML("li", func(e *colly.HTMLElement) {
+	f.collector.OnHTML("li", func(e *colly.HTMLElement) {
 		select {
 		case <-ctx.Done():
 			return
@@ -198,7 +203,7 @@ func (f *Maillist) fetchMaillist(ctx context.Context, options *Options, qfn Quer
 		}
 	})
 
-	f.c.OnHTML("pre", func(e *colly.HTMLElement) {
+	f.collector.OnHTML("pre", func(e *colly.HTMLElement) {
 		select {
 		case <-ctx.Done():
 			return
@@ -218,7 +223,7 @@ func (f *Maillist) fetchMaillist(ctx context.Context, options *Options, qfn Quer
 
 				// fill result Content
 				if res, ok := resMap[currentUrl]; ok {
-					res.Content = e.Text
+					res.Content = []byte([]byte(e.Text))
 					rch <- res
 				} else {
 					ech <- fmt.Errorf("unexpected log: %s", currentUrl)
@@ -227,9 +232,9 @@ func (f *Maillist) fetchMaillist(ctx context.Context, options *Options, qfn Quer
 		}
 	})
 
-	f.c.OnError(func(resp *colly.Response, err error) {
+	f.collector.OnError(func(resp *colly.Response, err error) {
 		ech <- err
 	})
 
-	f.c.Visit(baseUrl)
+	f.collector.Visit(baseUrl)
 }

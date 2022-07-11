@@ -101,7 +101,7 @@ func runGrep(args []string) int {
 		}
 	}
 
-	c, err := cache.DefaultDirectory(progname)
+	c, err := cache.NewDefaultDirectory(progname)
 	if err != nil {
 		errExit("error initializing cache: %s", err)
 	}
@@ -112,14 +112,28 @@ func runGrep(args []string) int {
 		Origins:    origins,
 		Names:      names,
 	}
+	w := c.Walker(f)
+
 	o := &grep.Options{
+		ContextAfter:  contextAfter,
+		ContextBefore: contextBefore,
 		QueryIsRegexp: queryIsRegexp,
 	}
-	fn := func(path string, res []*grep.Result, err error) error {
+	g := grep.NewCached(w)
+
+	gfn := func(entry cache.Entry, res []*grep.Result, err error) error {
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %s\n", err)
+			return err
+		}
+		fmt.Printf("====> %#v\n", res)
 		return nil
 	}
 
-	grep.Grep(c, f, o, fn)
+	if err := g.Grep(o, opts.Args(), gfn); err != nil {
+		errExit("grep error: %s", err)
+		return 1
+	}
 
 	return 0
 }
