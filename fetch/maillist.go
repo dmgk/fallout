@@ -41,7 +41,7 @@ func (f *Maillist) Fetch(options *Options, qfn QueryFunc, rfn ResultFunc) error 
 		case res, rok = <-rch:
 			if rok {
 				if rerr := rfn(res, nil); rerr != nil {
-					if rerr == ErrStop {
+					if rerr == Stop {
 						return nil
 					}
 					return rerr
@@ -50,7 +50,7 @@ func (f *Maillist) Fetch(options *Options, qfn QueryFunc, rfn ResultFunc) error 
 		case err, eok := <-ech:
 			if eok {
 				if rerr := rfn(nil, err); rerr != nil {
-					if rerr == ErrStop {
+					if rerr == Stop {
 						return nil
 					}
 					return rerr

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"html/template"
 	"os"
+	"strings"
+	"unicode"
 
 	"github.com/dmgk/getopt"
 )
@@ -102,4 +104,10 @@ func main() {
 	}
 
 	os.Exit(cmd.run(args))
+}
+
+func splitOptions(s string) []string {
+	return strings.FieldsFunc(s, func(r rune) bool {
+		return unicode.IsSpace(r) || r == ','
+	})
 }

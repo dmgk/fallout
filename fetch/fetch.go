@@ -30,4 +30,4 @@ func (r *Result) String() string {
 	return fmt.Sprintf("%s %32s %s", r.Timestamp.Format("2006-01-02 15:04:05"), r.Builder, r.Origin)
 }
 
-var ErrStop = errors.New("stop")
+var Stop = errors.New("stop")

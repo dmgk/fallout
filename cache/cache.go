@@ -14,6 +14,7 @@ type Entry interface {
 	Exists() bool
 	Get() ([]byte, error)
 	Put(buf []byte) error
+	Path() string
 	Info() (*EntryInfo, error)
 }
 
@@ -36,4 +37,4 @@ type Walker interface {
 
 type WalkFunc func(entry Entry, err error) error
 
-var ErrStop = errors.New("stop")
+var Stop = errors.New("stop")

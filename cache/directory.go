@@ -91,6 +91,10 @@ func (e DirectoryEntry) Put(buf []byte) error {
 	return err
 }
 
+func (e DirectoryEntry) Path() string {
+	return string(e)
+}
+
 func (e DirectoryEntry) Info() (*EntryInfo, error) {
 	parts := strings.Split(string(e), string(filepath.Separator))
 	if len(parts) < 4 {
@@ -133,7 +137,7 @@ func (w *DirectoryWalker) Walk(wfn WalkFunc) error {
 		case r, rok = <-rch:
 			if rok {
 				if werr := wfn(r, nil); werr != nil {
-					if werr == ErrStop {
+					if werr == Stop {
 						return nil
 					}
 					return werr
@@ -142,7 +146,7 @@ func (w *DirectoryWalker) Walk(wfn WalkFunc) error {
 		case err, eok := <-ech:
 			if eok {
 				if werr := wfn(nil, err); werr != nil {
-					if werr == ErrStop {
+					if werr == Stop {
 						return nil
 					}
 					return werr
