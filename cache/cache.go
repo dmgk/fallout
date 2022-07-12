@@ -5,36 +5,69 @@ import (
 	"time"
 )
 
+// Cacher is the cache interface.
 type Cacher interface {
+	// Path returns this cache path (specific for the implementation).
+	Path() string
+	// Cache returns (a possibly not yet existing or empty) cache entry with given attributes.
 	Cache(builder, origin string, timestamp time.Time) (Entry, error)
+	// Walker returns cache walking interface.
 	Walker(filter *Filter) Walker
+	// Remove completely removes all cached data.
+	Remove() error
 }
 
+// Entry is the cache entry interface.
 type Entry interface {
+	// Exists return true if this entry is present in the cache.
 	Exists() bool
+	// Get returns entry contents.
 	Get() ([]byte, error)
+	// Put saves buf as the entry contents in the cache.
 	Put(buf []byte) error
+	// Remove removes this entry from the cache.
+	Remove() error
+	// With calls wfn with this entry contents as a byte slice.
+	// Underlying buffer is taken from the buffer pool and reused.
+	With(wfn WithFunc) error
+	// Path returns this entry path (specific for the implementation).
 	Path() string
+	// Info return entry attributes.
 	Info() (*EntryInfo, error)
 }
 
+type WithFunc func(buf []byte) error
+
+// EntryInfo holds entry attributes.
 type EntryInfo struct {
-	Builder   string
-	Origin    string
+	// Builder name.
+	Builder string
+	// Port origin.
+	Origin string
+	// Fallout log timestamp.
 	Timestamp time.Time
 }
 
+// Filter describes what walked is allowed to walk.
 type Filter struct {
-	Builders   []string
+	// Allowed builder names, partial names are ok.
+	Builders []string
+	// Allowed categories, partial names are ok.
 	Categories []string
-	Origins    []string
-	Names      []string
+	// Allowed origins, partial names are ok.
+	Origins []string
+	// Allowed port names, partial names are ok.
+	Names []string
 }
 
+// Walker is the cache walker interface.
 type Walker interface {
+	// Walk walks the cache and calls wfn for each entry that made it through Filter.
 	Walk(wfn WalkFunc) error
 }
 
 type WalkFunc func(entry Entry, err error) error
 
+// Stop is a special value that can be returned by WalkFunc to indicate that
+// walking needs to be terminated early.
 var Stop = errors.New("stop")

@@ -128,6 +128,7 @@ func (f *Maillist) fetchMaillist(ctx context.Context, options *Options, qfn Quer
 				return resSlice[i].Timestamp.After(resSlice[j].Timestamp)
 			})
 			for _, r := range resSlice {
+				count++
 				if options.Limit > 0 && count > options.Limit {
 					break // limit is reached
 				}
@@ -140,7 +141,6 @@ func (f *Maillist) fetchMaillist(ctx context.Context, options *Options, qfn Quer
 				if !cached {
 					f.collector.Visit(r.URL)
 				}
-				count++
 			}
 		}
 	})

@@ -9,6 +9,7 @@ import (
 	"github.com/dmgk/fallout/grep"
 )
 
+// Formatter flags.
 const (
 	Fcolor = 1 << iota
 	FfilenamesOnly
@@ -16,6 +17,7 @@ const (
 	Fdefaults = 0
 )
 
+// Known color sequences.
 var colorMap = map[byte]string{
 	'a': "\033[0;30m", // black
 	'b': "\033[0;31m", // red
@@ -37,8 +39,10 @@ var colorMap = map[byte]string{
 
 const creset = "\033[0m"
 
+// The default color palette.
 const DefaultColors = "BCDA"
 
+// Color palette color order.
 const (
 	cquery = iota
 	cmatch
@@ -79,8 +83,8 @@ func NewText(w io.Writer, flags int) Formatter {
 }
 
 func (f *textFormatter) Format(entry cache.Entry, matches []*grep.Match) error {
-	buf := getBuf()
-	defer putBuf(buf)
+	buf := bufGet()
+	defer bufPut(buf)
 
 	if f.flags&FfilenamesOnly != 0 {
 		buf.WriteString(entry.Path())
@@ -99,8 +103,8 @@ func (f *textFormatter) Format(entry cache.Entry, matches []*grep.Match) error {
 		buf.WriteString(":\n")
 
 		for i, m := range matches {
-			formatBuf := getBuf()
-			defer putBuf(formatBuf)
+			formatBuf := bufGet()
+			defer bufPut(formatBuf)
 
 			if i > 0 {
 				if f.flags&Fcolor != 0 {
@@ -148,11 +152,11 @@ var bufPool = sync.Pool{
 	},
 }
 
-func getBuf() *bytes.Buffer {
+func bufGet() *bytes.Buffer {
 	return bufPool.Get().(*bytes.Buffer)
 }
 
-func putBuf(buf *bytes.Buffer) {
+func bufPut(buf *bytes.Buffer) {
 	buf.Reset()
 	bufPool.Put(buf)
 }

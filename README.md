@@ -4,7 +4,7 @@ Download and search FreeBSD build cluster fallout logs.
 
 #### Installation
 
-    go install github.com/dmgk/fallout
+    go install github.com/dmgk/fallout@latest
 
 #### Usage
 
@@ -20,7 +20,7 @@ Options:
 Commands (pass -h for command help):
   fetch       download fallout logs
   grep        search fallout logs
-
+  clean       clean log cache
 ```
 
 ```
@@ -55,6 +55,18 @@ Options:
   -M          color mode [auto|never|always] (default: auto)
   -G colors   set colors (default: "BCDA")
               the order is query,match,path,separator; see ls(1) for color codes
+```
+
+```
+usage: fallout clean [-hx] [-d days] [-a date]
+
+Clean log cache.
+
+Options:
+  -h          show help and exit
+  -d days     remove logs that are more than days old (default: 30)
+  -a date     remove logs that are older than date, in RFC-3339 format (default: 2022-06-12)
+  -x          remove all cached data
 ```
 
 #### Examples:

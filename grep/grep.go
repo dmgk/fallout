@@ -10,10 +10,12 @@ import (
 	"github.com/dmgk/fallout/cache"
 )
 
+// Grepper searches cached fallout logs.
 type Grepper struct {
 	walker cache.Walker
 }
 
+// New creates a new Grepper instance.
 func New(walker cache.Walker) *Grepper {
 	return &Grepper{
 		walker: walker,
@@ -21,19 +23,23 @@ func New(walker cache.Walker) *Grepper {
 }
 
 type Options struct {
-	ContextAfter  int
+	// Number of context lines before the match.
+	ContextAfter int
+	// Number of context lines after the match.
 	ContextBefore int
+	// Treat queries as a regular expressions, not as a plain text.
 	QueryIsRegexp bool
-	Ored          bool
+	// At least one query needs to match, not all of them.
+	Ored bool
 }
 
 type GrepFunc func(entry cache.Entry, res []*Match, err error) error
 
 // Match describes one search match result.
 type Match struct {
-	// Text holds the match as a byte string
+	// Text holds the match as a byte string.
 	Text []byte
-	// ResultSubmatch is a byte index pair identifying the result submatch in Text
+	// ResultSubmatch is a byte index pair identifying the result submatch in Text.
 	ResultSubmatch []int
 }
 
@@ -41,11 +47,13 @@ type Match struct {
 // search needs to be terminated early.
 var Stop = errors.New("stop")
 
+// grepResult holds entry matching results.
 type grepResult struct {
 	entry cache.Entry
 	mm    []*Match
 }
 
+// Grep searches cached logs and calls gfn for each found match.
 func (g *Grepper) Grep(options *Options, queries []string, gfn GrepFunc) error {
 	var mrs []*matcher
 	for _, q := range queries {
@@ -88,6 +96,7 @@ func (g *Grepper) Grep(options *Options, queries []string, gfn GrepFunc) error {
 	return nil
 }
 
+// walkCache does matching against cached logs.
 func (g *Grepper) walkCache(mrs []*matcher, ored bool, rch chan *grepResult, ech chan error, jobs int) {
 	defer close(rch)
 	defer close(ech)
@@ -95,7 +104,7 @@ func (g *Grepper) walkCache(mrs []*matcher, ored bool, rch chan *grepResult, ech
 	var wg sync.WaitGroup
 	sem := make(chan int, jobs)
 
-	g.walker.Walk(func(entry cache.Entry, err error) error {
+	err := g.walker.Walk(func(entry cache.Entry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -109,62 +118,68 @@ func (g *Grepper) walkCache(mrs []*matcher, ored bool, rch chan *grepResult, ech
 				wg.Done()
 			}()
 
-			buf, err := entry.Get()
+			err := entry.With(func(buf []byte) error {
+				res := &grepResult{
+					entry: entry,
+				}
+
+				// no queries were provided, return the whole text
+				if len(mrs) == 0 {
+					res.mm = []*Match{
+						{Text: buf},
+					}
+					rch <- res
+					return nil
+				}
+
+				for _, mr := range mrs {
+					m, err := mr.match(buf)
+					if err != nil {
+						return err
+					}
+					if !ored && m == nil {
+						return nil // results are ANDed and the current matcher doesn't match
+					}
+					if m != nil {
+						res.mm = append(res.mm, m)
+					}
+				}
+				if len(res.mm) > 0 {
+					rch <- res
+				}
+
+				return nil
+			})
 			if err != nil {
 				ech <- err
-				return
-			}
-
-			res := &grepResult{
-				entry: entry,
-			}
-
-			// no matcher were provided, everything matches
-			if len(mrs) == 0 {
-				res.mm = []*Match{
-					{Text: buf},
-				}
-				rch <- res
-				return
-			}
-
-			for _, mr := range mrs {
-				m, err := mr.match(buf)
-				if err != nil {
-					ech <- err
-					return
-				}
-				if !ored && m == nil {
-					return // results are ANDed and the current matcher hasn't matched
-				}
-				if m != nil {
-					res.mm = append(res.mm, m)
-				}
-			}
-
-			if len(res.mm) > 0 {
-				rch <- res
 			}
 		}()
 
 		return nil
 	})
+	if err != nil {
+		ech <- err
+	}
 
 	wg.Wait()
 }
 
+// matcher describes a compiled regular expression query
 type matcher struct {
-	rx  *regexp.Regexp // compiled regexp
-	rsi int            // result subexpression index
+	// Compiled regexp.
+	rx *regexp.Regexp
+	// Result subexpression index.
+	rsi int
 }
 
 const (
-	// result subexpression name
+	// Result subexpression name.
 	rsn = "r"
-	// query rx pattern
+	// Query rx pattern.
 	queryPat = `(?:.*\n){0,%d}.*(?P<r>%s).*(\n|\z)(?:.*\n){0,%d}`
 )
 
+// newMatcher returns compiled matcher for the given query.
 func newMatcher(options *Options, query string) (*matcher, error) {
 	q := query
 	if !options.QueryIsRegexp {
@@ -191,6 +206,7 @@ func newMatcher(options *Options, query string) (*matcher, error) {
 	}, nil
 }
 
+// match performs matching against the given content.
 func (m *matcher) match(content []byte) (*Match, error) {
 	smi := m.rx.FindSubmatchIndex(content)
 	if smi == nil {

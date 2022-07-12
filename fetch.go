@@ -30,21 +30,18 @@ var fetchCmd = command{
 	run:     runFetch,
 }
 
-const (
-	defaultDaysLimit = 7
-	dateFormat       = "2006-01-02"
-)
+const defaultFetchDaysLimit = 7
 
 var (
-	countLimit int
-	dateLimit  = time.Now().UTC().AddDate(0, 0, -defaultDaysLimit)
+	fetchCountLimit int
+	fetchDateLimit  = time.Now().UTC().AddDate(0, 0, -defaultFetchDaysLimit)
 )
 
 func showFetchUsage() {
 	err := fetchUsageTmpl.Execute(os.Stdout, map[string]any{
 		"progname":   progname,
-		"daysLimit":  defaultDaysLimit,
-		"dateLimit":  dateLimit,
+		"daysLimit":  defaultFetchDaysLimit,
+		"dateLimit":  fetchDateLimit,
 		"dateFormat": dateFormat,
 	})
 	if err != nil {
@@ -73,7 +70,7 @@ func runFetch(args []string) int {
 			if err != nil {
 				errExit(err.Error())
 			}
-			dateLimit = time.Now().UTC().AddDate(0, 0, -v)
+			fetchDateLimit = time.Now().UTC().AddDate(0, 0, -v)
 		case 'a':
 			t, err := time.Parse(dateFormat, opt.String())
 			if err != nil {
@@ -82,13 +79,13 @@ func runFetch(args []string) int {
 			if t.After(time.Now().UTC()) {
 				errExit("date in the future: %s", t.Format(dateFormat))
 			}
-			dateLimit = t
+			fetchDateLimit = t
 		case 'n':
 			v, err := opt.Int()
 			if err != nil {
 				errExit(err.Error())
 			}
-			countLimit = v
+			fetchCountLimit = v
 		}
 	}
 
@@ -100,8 +97,8 @@ func runFetch(args []string) int {
 
 	f := fetch.NewMaillist(fmt.Sprintf("%s/%s", progname, version))
 	o := &fetch.Options{
-		After: dateLimit,
-		Limit: countLimit,
+		After: fetchDateLimit,
+		Limit: fetchCountLimit,
 	}
 
 	qfn := func(res *fetch.Result) (bool, error) {
@@ -140,7 +137,7 @@ func runFetch(args []string) int {
 		errExit("fetch error: %s", err)
 		return 1
 	}
-	fmt.Printf("Processes %d logs, %d new.\n", totalCount, newCount)
+	fmt.Printf("Processed %d logs, %d new.\n", totalCount, newCount)
 
 	return 0
 }

@@ -10,8 +10,12 @@ import (
 	"github.com/dmgk/getopt"
 )
 
+const (
+	dateFormat = "2006-01-02"
+)
+
 var usageTmpl = template.Must(template.New("usage").Parse(`
-usage: {{.progname}} [-hv] command [options]
+usage: {{.progname}} [-hV] command [options]
 
 Download and search fallout logs.
 
@@ -58,6 +62,7 @@ type command struct {
 var cmds = []*command{
 	&fetchCmd,
 	&grepCmd,
+	&cleanCmd,
 }
 
 func main() {

@@ -1,12 +1,14 @@
 package cache
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -34,6 +36,10 @@ func NewDefaultDirectory(subdir string) (Cacher, error) {
 		return nil, err
 	}
 	return NewDirectory(root, subdir)
+}
+
+func (c *Directory) Path() string {
+	return c.path
 }
 
 func (c *Directory) Cache(builder, origin string, timestamp time.Time) (Entry, error) {
@@ -69,11 +75,7 @@ func (e DirectoryEntry) Get() ([]byte, error) {
 	}
 	defer f.Close()
 
-	buf, err := io.ReadAll(f)
-	if err != nil {
-		return nil, err
-	}
-	return buf, nil
+	return io.ReadAll(f)
 }
 
 func (e DirectoryEntry) Put(buf []byte) error {
@@ -89,6 +91,34 @@ func (e DirectoryEntry) Put(buf []byte) error {
 
 	_, err = f.Write(buf)
 	return err
+}
+
+func (e DirectoryEntry) Remove() error {
+	return os.Remove(string(e))
+}
+
+func (e DirectoryEntry) With(wfn WithFunc) error {
+	f, err := os.Open(string(e))
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	fi, err := f.Stat()
+	if err != nil {
+		return err
+	}
+
+	buf := bufGet()
+	defer bufPut(buf)
+
+	buf.Grow(int(fi.Size()) + bytes.MinRead)
+	_, err = buf.ReadFrom(f)
+	if err != nil {
+		return err
+	}
+
+	return wfn(buf.Bytes())
 }
 
 func (e DirectoryEntry) Path() string {
@@ -252,4 +282,23 @@ func (w *DirectoryWalker) walkOrigin(path string, rch chan Entry, ech chan error
 			rch <- DirectoryEntry(filepath.Join(path, d.Name()))
 		}
 	}
+}
+
+func (c *Directory) Remove() error {
+	return os.RemoveAll(c.path)
+}
+
+var bufPool = sync.Pool{
+	New: func() interface{} {
+		return &bytes.Buffer{}
+	},
+}
+
+func bufGet() *bytes.Buffer {
+	return bufPool.Get().(*bytes.Buffer)
+}
+
+func bufPut(buf *bytes.Buffer) {
+	buf.Reset()
+	bufPool.Put(buf)
 }

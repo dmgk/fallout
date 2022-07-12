@@ -73,7 +73,7 @@ func showGrepUsage() {
 }
 
 func runGrep(args []string) int {
-	if val, ok := os.LookupEnv("PORTGREP_COLORS"); ok && val != "" {
+	if val, ok := os.LookupEnv("FALLOUT_COLORS"); ok && val != "" {
 		colors = val
 	}
 
