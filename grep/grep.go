@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"runtime"
+	"sync"
 
 	"github.com/dmgk/fallout/cache"
 )
@@ -22,6 +24,7 @@ type Options struct {
 	ContextAfter  int
 	ContextBefore int
 	QueryIsRegexp bool
+	Ored          bool
 }
 
 type GrepFunc func(entry cache.Entry, res []*Match, err error) error
@@ -30,8 +33,7 @@ type GrepFunc func(entry cache.Entry, res []*Match, err error) error
 type Match struct {
 	// Text holds the match as a byte string
 	Text []byte
-
-	// QuerySubmatch is a byte index pair identifying the result submatch in Text
+	// ResultSubmatch is a byte index pair identifying the result submatch in Text
 	ResultSubmatch []int
 }
 
@@ -57,7 +59,7 @@ func (g *Grepper) Grep(options *Options, queries []string, gfn GrepFunc) error {
 	rch := make(chan *grepResult)
 	ech := make(chan error)
 
-	go g.walkCache(mrs, rch, ech)
+	go g.walkCache(mrs, options.Ored, rch, ech, runtime.NumCPU())
 
 	rok := true
 	for rok {
@@ -86,41 +88,69 @@ func (g *Grepper) Grep(options *Options, queries []string, gfn GrepFunc) error {
 	return nil
 }
 
-func (g *Grepper) walkCache(mrs []*matcher, rch chan *grepResult, ech chan error) {
+func (g *Grepper) walkCache(mrs []*matcher, ored bool, rch chan *grepResult, ech chan error, jobs int) {
 	defer close(rch)
 	defer close(ech)
+
+	var wg sync.WaitGroup
+	sem := make(chan int, jobs)
 
 	g.walker.Walk(func(entry cache.Entry, err error) error {
 		if err != nil {
 			return err
 		}
 
-		buf, err := entry.Get()
-		if err != nil {
-			return err
-		}
+		sem <- 1
+		wg.Add(1)
 
-		res := &grepResult{
-			entry: entry,
-		}
-		for _, mr := range mrs {
-			m, err := mr.match(buf)
+		go func() {
+			defer func() {
+				<-sem
+				wg.Done()
+			}()
+
+			buf, err := entry.Get()
 			if err != nil {
-				return err
+				ech <- err
+				return
 			}
-			// if !rxsOr && m == nil {
-			//     return // results are ANDed and the current rx doesn't match
-			// }
-			if m != nil {
-				res.mm = append(res.mm, m)
-			}
-		}
 
-		if len(res.mm) > 0 {
-			rch <- res
-		}
+			res := &grepResult{
+				entry: entry,
+			}
+
+			// no matcher were provided, everything matches
+			if len(mrs) == 0 {
+				res.mm = []*Match{
+					{Text: buf},
+				}
+				rch <- res
+				return
+			}
+
+			for _, mr := range mrs {
+				m, err := mr.match(buf)
+				if err != nil {
+					ech <- err
+					return
+				}
+				if !ored && m == nil {
+					return // results are ANDed and the current matcher hasn't matched
+				}
+				if m != nil {
+					res.mm = append(res.mm, m)
+				}
+			}
+
+			if len(res.mm) > 0 {
+				rch <- res
+			}
+		}()
+
 		return nil
 	})
+
+	wg.Wait()
 }
 
 type matcher struct {

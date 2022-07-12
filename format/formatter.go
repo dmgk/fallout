@@ -11,11 +11,9 @@ import (
 
 const (
 	Fcolor = 1 << iota
-	ForiginsOnly
-	ForiginsSingleLine
-	FstripRoot
+	FfilenamesOnly
 
-	Fdefaults = FstripRoot
+	Fdefaults = 0
 )
 
 var colorMap = map[byte]string{
@@ -84,16 +82,7 @@ func (f *textFormatter) Format(entry cache.Entry, matches []*grep.Match) error {
 	buf := getBuf()
 	defer putBuf(buf)
 
-	if f.flags&ForiginsSingleLine != 0 {
-		if f.needSep {
-			buf.WriteByte(' ')
-		}
-		buf.WriteString(entry.Path())
-		f.needSep = true
-		return f.write(buf)
-	}
-
-	if f.flags&ForiginsOnly != 0 {
+	if f.flags&FfilenamesOnly != 0 {
 		buf.WriteString(entry.Path())
 		buf.WriteByte('\n')
 		return f.write(buf)
@@ -125,10 +114,13 @@ func (f *textFormatter) Format(entry cache.Entry, matches []*grep.Match) error {
 
 			if f.flags&Fcolor != 0 {
 				if m.ResultSubmatch != nil {
+					formatBuf.Write(m.Text[:m.ResultSubmatch[0]])
 					formatBuf.WriteString(colors[cmatch])
 					formatBuf.Write(m.Text[m.ResultSubmatch[0]:m.ResultSubmatch[1]])
 					formatBuf.WriteString(creset)
 					formatBuf.Write(m.Text[m.ResultSubmatch[1]:])
+				} else {
+					formatBuf.Write(m.Text)
 				}
 			} else {
 				formatBuf.Write(m.Text)

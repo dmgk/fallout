@@ -17,7 +17,7 @@ Download and search fallout logs.
 
 Options:
   -h          show help and exit
-  -v          show version and exit
+  -V          show version and exit
 
 Commands (pass -h for command help):{{range .cmds}}
   {{.Name | printf "%-11s"}} {{.Summary}}{{end}}
@@ -61,7 +61,7 @@ var cmds = []*command{
 }
 
 func main() {
-	opts, err := getopt.New("hv")
+	opts, err := getopt.New("hV")
 	if err != nil {
 		panic(fmt.Sprintf("error creating options parser: %s", err))
 	}
@@ -77,7 +77,7 @@ func main() {
 		case 'h':
 			showUsage()
 			os.Exit(0)
-		case 'v':
+		case 'V':
 			showVersion()
 			os.Exit(0)
 		default:

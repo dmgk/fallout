@@ -23,11 +23,13 @@ Options:
   -A count    show count lines of context after match
   -B count    show count lines of context before match
   -C count    show count lines of context around match
-  -x          treat query as a regular expression
   -b builder  limit search only to this builder
   -c category limit search only to this category
   -o origin   limit search only to this origin
   -n name     limit search only to this port name
+  -x          treat query as a regular expression
+  -O          multiple queries are OR-ed (default: AND-ed)
+  -l          print only matching log filenames
   -M          color mode [auto|never|always] (default: {{.colorMode}})
   -G colors   set colors (default: "{{.colors}}")
               the order is query,match,path,separator; see ls(1) for color codes
@@ -42,11 +44,13 @@ var grepCmd = command{
 var (
 	contextAfter  int
 	contextBefore int
-	queryIsRegexp bool
 	builders      []string
 	categories    []string
 	origins       []string
 	names         []string
+	queryIsRegexp bool
+	ored          bool
+	filenamesOnly bool
 	colorMode     = colorModeAuto
 	colors        = format.DefaultColors
 )
@@ -73,7 +77,7 @@ func runGrep(args []string) int {
 		colors = val
 	}
 
-	opts, err := getopt.NewArgv("hA:B:C:xM:b:c:o:n:", args)
+	opts, err := getopt.NewArgv("hA:B:C:b:c:o:n:xOlM:G:", args)
 	if err != nil {
 		panic(fmt.Sprintf("error creating options parser: %s", err))
 	}
@@ -107,8 +111,6 @@ func runGrep(args []string) int {
 			}
 			contextBefore = v
 			contextAfter = v
-		case 'x':
-			queryIsRegexp = true
 		case 'b':
 			builders = splitOptions(opt.String())
 		case 'c':
@@ -117,6 +119,12 @@ func runGrep(args []string) int {
 			origins = splitOptions(opt.String())
 		case 'n':
 			names = splitOptions(opt.String())
+		case 'x':
+			queryIsRegexp = true
+		case 'O':
+			ored = true
+		case 'l':
+			filenamesOnly = true
 		case 'M':
 			switch opt.String() {
 			case colorModeAuto:
@@ -126,6 +134,8 @@ func runGrep(args []string) int {
 			default:
 				errExit("invalid color mode: %s", opt.String())
 			}
+		case 'G':
+			colors = opt.String()
 		}
 	}
 
@@ -176,5 +186,9 @@ func initFormatter() format.Formatter {
 			format.SetColors(colors)
 		}
 	}
+	if filenamesOnly {
+		flags |= format.FfilenamesOnly
+	}
+
 	return format.NewText(w, flags)
 }
