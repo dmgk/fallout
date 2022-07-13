@@ -7,10 +7,12 @@ import (
 
 // Cacher is the cache interface.
 type Cacher interface {
-	// Path returns this cache path (specific for the implementation).
+	// Path returns this cache path (implementation-specific).
 	Path() string
+	// Timestamp of the most recent entry
+	Timestamp() time.Time
 	// Cache returns (a possibly not yet existing or empty) cache entry with given attributes.
-	Cache(builder, origin string, timestamp time.Time) (Entry, error)
+	Entry(builder, origin string, timestamp time.Time) (Entry, error)
 	// Walker returns cache walking interface.
 	Walker(filter *Filter) Walker
 	// Remove completely removes all cached data.
@@ -19,21 +21,21 @@ type Cacher interface {
 
 // Entry is the cache entry interface.
 type Entry interface {
+	// Path returns this entry path (implementation-specific).
+	Path() string
 	// Exists return true if this entry is present in the cache.
 	Exists() bool
 	// Get returns entry contents.
-	Get() ([]byte, error)
+	Read() ([]byte, error)
 	// Put saves buf as the entry contents in the cache.
-	Put(buf []byte) error
+	Write(buf []byte) error
 	// Remove removes this entry from the cache.
 	Remove() error
 	// With calls wfn with this entry contents as a byte slice.
 	// Underlying buffer is taken from the buffer pool and reused.
 	With(wfn WithFunc) error
-	// Path returns this entry path (specific for the implementation).
-	Path() string
 	// Info return entry attributes.
-	Info() (*EntryInfo, error)
+	Info() EntryInfo
 }
 
 type WithFunc func(buf []byte) error

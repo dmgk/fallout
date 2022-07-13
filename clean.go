@@ -102,10 +102,7 @@ func runClean(args []string) int {
 			return err
 		}
 
-		inf, err := entry.Info()
-		if err != nil {
-			return err
-		}
+		inf := entry.Info()
 		if inf.Timestamp.Before(cleanDateLimit) {
 			fmt.Printf("Removing %s\n", entry)
 			entry.Remove()

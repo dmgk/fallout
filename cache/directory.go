@@ -3,7 +3,6 @@ package cache
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -14,7 +13,10 @@ import (
 
 // Directory implements filesystem Cacher.
 type Directory struct {
+	// cache directory absolute path
 	path string
+	// timestamp of the most recent entry
+	timestamp time.Time
 }
 
 func NewDirectory(root, subdir string) (Cacher, error) {
@@ -26,7 +28,8 @@ func NewDirectory(root, subdir string) (Cacher, error) {
 		return nil, err
 	}
 	return &Directory{
-		path: path,
+		path:      path,
+		timestamp: loadTimestamp(path),
 	}, nil
 }
 
@@ -42,7 +45,31 @@ func (c *Directory) Path() string {
 	return c.path
 }
 
-func (c *Directory) Cache(builder, origin string, timestamp time.Time) (Entry, error) {
+func (c *Directory) Timestamp() time.Time {
+	return c.timestamp
+}
+
+func (c *Directory) Entry(builder, origin string, timestamp time.Time) (Entry, error) {
+	return newEntry(c, builder, origin, timestamp)
+}
+
+// DirectoryEntry implements filesystem Entry.
+type DirectoryEntry struct {
+	// directory cache that owns this entry
+	cache *Directory
+	// entry absolute path
+	path      string
+	builder   string
+	origin    string
+	timestamp time.Time
+}
+
+const (
+	timestampFormat = "2006-01-02T15:04:05"
+	ext             = ".log"
+)
+
+func newEntry(c *Directory, builder, origin string, timestamp time.Time) (*DirectoryEntry, error) {
 	if builder == "" {
 		return nil, errors.New("empty builder")
 	}
@@ -52,24 +79,26 @@ func (c *Directory) Cache(builder, origin string, timestamp time.Time) (Entry, e
 	if timestamp.IsZero() {
 		return nil, errors.New("zero timestamp")
 	}
-	return DirectoryEntry(filepath.Join(c.path, builder, origin, timestamp.Format(timestampFormat)) + ext), nil
+	return &DirectoryEntry{
+		cache:     c,
+		path:      filepath.Join(c.path, builder, origin, timestamp.Format(timestampFormat)) + ext,
+		builder:   builder,
+		origin:    origin,
+		timestamp: timestamp,
+	}, nil
 }
 
-// DirectoryEntry implements filesystem Entry.
-type DirectoryEntry string
+func (e *DirectoryEntry) Path() string {
+	return e.path
+}
 
-const (
-	timestampFormat = "2006-01-02T15:04:05"
-	ext             = ".log"
-)
-
-func (e DirectoryEntry) Exists() bool {
-	fi, err := os.Stat(string(e))
+func (e *DirectoryEntry) Exists() bool {
+	fi, err := os.Stat(e.path)
 	return err == nil && fi.Size() > 0
 }
 
-func (e DirectoryEntry) Get() ([]byte, error) {
-	f, err := os.Open(string(e))
+func (e *DirectoryEntry) Read() ([]byte, error) {
+	f, err := os.Open(e.path)
 	if err != nil {
 		return nil, err
 	}
@@ -78,27 +107,23 @@ func (e DirectoryEntry) Get() ([]byte, error) {
 	return io.ReadAll(f)
 }
 
-func (e DirectoryEntry) Put(buf []byte) error {
-	if err := os.MkdirAll(filepath.Dir(string(e)), 0755); err != nil {
+func (e *DirectoryEntry) Write(buf []byte) error {
+	if err := os.MkdirAll(filepath.Dir(e.path), 0755); err != nil {
 		return err
 	}
-
-	f, err := os.Create(string(e))
-	if err != nil {
+	if err := os.WriteFile(e.path, buf, 0644); err != nil {
 		return err
 	}
-	defer f.Close()
-
-	_, err = f.Write(buf)
-	return err
+	e.cache.updateTimestamp(e.timestamp)
+	return nil
 }
 
-func (e DirectoryEntry) Remove() error {
-	return os.Remove(string(e))
+func (e *DirectoryEntry) Remove() error {
+	return os.Remove(e.path)
 }
 
-func (e DirectoryEntry) With(wfn WithFunc) error {
-	f, err := os.Open(string(e))
+func (e *DirectoryEntry) With(wfn WithFunc) error {
+	f, err := os.Open(e.path)
 	if err != nil {
 		return err
 	}
@@ -121,36 +146,24 @@ func (e DirectoryEntry) With(wfn WithFunc) error {
 	return wfn(buf.Bytes())
 }
 
-func (e DirectoryEntry) Path() string {
-	return string(e)
-}
-
-func (e DirectoryEntry) Info() (*EntryInfo, error) {
-	parts := strings.Split(string(e), string(filepath.Separator))
-	if len(parts) < 4 {
-		return nil, errors.New("invalid DirectoryEntry")
+func (e *DirectoryEntry) Info() EntryInfo {
+	return EntryInfo{
+		Builder:   e.builder,
+		Origin:    e.origin,
+		Timestamp: e.timestamp,
 	}
-	ts, err := time.Parse(timestampFormat, strings.TrimSuffix(parts[len(parts)-1], ext))
-	if err != nil {
-		return nil, fmt.Errorf("invalid DirectoryEntry timestamp: %s", err)
-	}
-	return &EntryInfo{
-		Builder:   parts[len(parts)-4],
-		Origin:    parts[len(parts)-3] + string(filepath.Separator) + parts[len(parts)-2],
-		Timestamp: ts,
-	}, nil
 }
 
 func (c *Directory) Walker(filter *Filter) Walker {
 	return &DirectoryWalker{
-		path:   c.path,
+		cache:  c,
 		filter: filter,
 	}
 }
 
 // DirectoryWalker implements filesystem cache Walker.
 type DirectoryWalker struct {
-	path   string
+	cache  *Directory
 	filter *Filter
 }
 
@@ -232,55 +245,87 @@ func (w *DirectoryWalker) walkCache(rch chan Entry, ech chan error) {
 	defer close(rch)
 	defer close(ech)
 
-	dir, err := os.ReadDir(w.path)
+	dir, err := os.ReadDir(w.cache.path)
 	if err != nil {
 		ech <- err
 		return
 	}
 	for _, d := range dir {
 		if d.IsDir() && builderAllowed(d.Name(), w.filter) {
-			w.walkBuilder(filepath.Join(w.path, d.Name()), rch, ech)
+			w.walkBuilder(d.Name(), rch, ech)
 		}
 	}
 }
 
-func (w *DirectoryWalker) walkBuilder(path string, rch chan Entry, ech chan error) {
-	dir, err := os.ReadDir(path)
+func (w *DirectoryWalker) walkBuilder(builder string, rch chan Entry, ech chan error) {
+	dir, err := os.ReadDir(filepath.Join(w.cache.path, builder))
 	if err != nil {
 		ech <- err
 		return
 	}
 	for _, d := range dir {
 		if d.IsDir() && categoryAllowed(d.Name(), w.filter) {
-			w.walkCategory(filepath.Join(path, d.Name()), rch, ech)
+			w.walkCategory(builder, d.Name(), rch, ech)
 		}
 	}
 }
 
-func (w *DirectoryWalker) walkCategory(path string, rch chan Entry, ech chan error) {
-	dir, err := os.ReadDir(path)
+func (w *DirectoryWalker) walkCategory(builder, category string, rch chan Entry, ech chan error) {
+	dir, err := os.ReadDir(filepath.Join(w.cache.path, builder, category))
 	if err != nil {
 		ech <- err
 		return
 	}
 	for _, d := range dir {
-		o := filepath.Base(path) + string(filepath.Separator) + d.Name()
-		if d.IsDir() && originAllowed(o, w.filter) && nameAllowed(d.Name(), w.filter) {
-			w.walkOrigin(filepath.Join(path, d.Name()), rch, ech)
+		origin := category + string(filepath.Separator) + d.Name()
+		if d.IsDir() && originAllowed(origin, w.filter) && nameAllowed(d.Name(), w.filter) {
+			w.walkOrigin(builder, origin, rch, ech)
 		}
 	}
 }
 
-func (w *DirectoryWalker) walkOrigin(path string, rch chan Entry, ech chan error) {
-	dir, err := os.ReadDir(path)
+func (w *DirectoryWalker) walkOrigin(builder, origin string, rch chan Entry, ech chan error) {
+	dir, err := os.ReadDir(filepath.Join(w.cache.path, builder, origin))
 	if err != nil {
 		ech <- err
 		return
 	}
 	for _, d := range dir {
 		if !d.IsDir() {
-			rch <- DirectoryEntry(filepath.Join(path, d.Name()))
+			ts, err := time.Parse(timestampFormat, strings.TrimSuffix(d.Name(), ext))
+			if err != nil {
+				ech <- err
+				continue
+			}
+			e, err := newEntry(w.cache, builder, origin, ts)
+			if err != nil {
+				ech <- err
+				continue
+			}
+			rch <- e
 		}
+	}
+}
+
+const (
+	cacheTimestampName   = ".timestamp"
+	cacheTimestampFormat = time.RFC3339
+)
+
+func loadTimestamp(path string) time.Time {
+	var zero time.Time
+	if buf, err := os.ReadFile(filepath.Join(path, cacheTimestampName)); err == nil {
+		if ts, err := time.Parse(cacheTimestampFormat, string(buf)); err == nil {
+			return ts
+		}
+	}
+	return zero
+}
+
+func (c *Directory) updateTimestamp(ts time.Time) {
+	if ts.After(c.timestamp) {
+		c.timestamp = ts
+		_ = os.WriteFile(filepath.Join(c.path, cacheTimestampName), []byte(ts.Format(cacheTimestampFormat)), 0664)
 	}
 }
 

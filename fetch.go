@@ -13,12 +13,13 @@ import (
 )
 
 var fetchUsageTmpl = template.Must(template.New("usage-fetch").Parse(`
-usage: {{.progname}} fetch [-h] [-d days] [-a date] [-n count]
+usage: {{.progname}} fetch [-hN] [-d days] [-a date] [-n count]
 
 Download and cache fallout logs.
 
 Options:
   -h          show help and exit
+  -N          download only new logs appeared since the last fetch
   -d days     download logs for the last days (default: {{.daysLimit}})
   -a date     download only logs after this date, in RFC-3339 format (default: {{.dateLimit.Format .dateFormat}})
   -n count    download only recent count logs
@@ -33,6 +34,7 @@ var fetchCmd = command{
 const defaultFetchDaysLimit = 7
 
 var (
+	onlyNew         bool
 	fetchCountLimit int
 	fetchDateLimit  = time.Now().UTC().AddDate(0, 0, -defaultFetchDaysLimit)
 )
@@ -50,7 +52,7 @@ func showFetchUsage() {
 }
 
 func runFetch(args []string) int {
-	opts, err := getopt.NewArgv("hd:a:n:", args)
+	opts, err := getopt.NewArgv("hNd:a:n:", argsWithDefaults(args, "FALLOUT_FETCH_OPTS"))
 	if err != nil {
 		panic(fmt.Sprintf("error creating options parser: %s", err))
 	}
@@ -65,6 +67,8 @@ func runFetch(args []string) int {
 		case 'h':
 			showFetchUsage()
 			os.Exit(0)
+		case 'N':
+			onlyNew = true
 		case 'd':
 			v, err := opt.Int()
 			if err != nil {
@@ -86,10 +90,12 @@ func runFetch(args []string) int {
 				errExit(err.Error())
 			}
 			fetchCountLimit = v
+		default:
+			panic("unhandled option: -" + string(opt.Opt))
 		}
 	}
 
-	var totalCount, newCount uint32
+	var count uint32
 	c, err := cache.NewDefaultDirectory(progname)
 	if err != nil {
 		errExit("error initializing cache: %s", err)
@@ -100,18 +106,16 @@ func runFetch(args []string) int {
 		After: fetchDateLimit,
 		Limit: fetchCountLimit,
 	}
+	if onlyNew {
+		o.After = c.Timestamp()
+	}
 
 	qfn := func(res *fetch.Result) (bool, error) {
-		e, err := c.Cache(res.Builder, res.Origin, res.Timestamp)
+		e, err := c.Entry(res.Builder, res.Origin, res.Timestamp)
 		if err != nil {
 			return false, err
 		}
-		atomic.AddUint32(&totalCount, 1)
-		if e.Exists() {
-			fmt.Fprintf(os.Stdout, "%s (cached)\n", res)
-			return true, nil
-		}
-		return false, nil
+		return e.Exists(), nil
 	}
 
 	rfn := func(res *fetch.Result, err error) error {
@@ -121,14 +125,14 @@ func runFetch(args []string) int {
 		}
 
 		fmt.Fprintf(os.Stdout, "%s : %d bytes\n", res, len(res.Content))
-		e, err := c.Cache(res.Builder, res.Origin, res.Timestamp)
+		e, err := c.Entry(res.Builder, res.Origin, res.Timestamp)
 		if err != nil {
 			return err
 		}
-		if err := e.Put(res.Content); err != nil {
+		if err := e.Write(res.Content); err != nil {
 			return err
 		}
-		atomic.AddUint32(&newCount, 1)
+		atomic.AddUint32(&count, 1)
 
 		return nil
 	}
@@ -137,7 +141,11 @@ func runFetch(args []string) int {
 		errExit("fetch error: %s", err)
 		return 1
 	}
-	fmt.Printf("Processed %d logs, %d new.\n", totalCount, newCount)
+	if count > 0 {
+		fmt.Printf("Downloaded %d new log(s).\n", count)
+	} else {
+		fmt.Println("No new logs.")
+	}
 
 	return 0
 }

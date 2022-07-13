@@ -14,12 +14,15 @@ import (
 )
 
 var grepUsageTmpl = template.Must(template.New("usage-grep").Parse(`
-usage: {{.progname}} grep [-hx] [-A count] [-B count] [-C count] [-b builder[,builder]] [-c category[,category]] [-o origin[,origin]] [-n name[,name]] query [query ...]
+usage: {{.progname}} grep [-hxOl] [-A count] [-B count] [-C count] [-b builder[,builder]] [-c category[,category]] [-o origin[,origin]] [-n name[,name]] query [query ...]
 
 Search cached fallout logs.
 
 Options:
   -h          show help and exit
+  -x          treat query as a regular expression
+  -O          multiple queries are OR-ed (default: AND-ed)
+  -l          print only matching log filenames
   -A count    show count lines of context after match
   -B count    show count lines of context before match
   -C count    show count lines of context around match
@@ -27,12 +30,6 @@ Options:
   -c category limit search only to this category
   -o origin   limit search only to this origin
   -n name     limit search only to this port name
-  -x          treat query as a regular expression
-  -O          multiple queries are OR-ed (default: AND-ed)
-  -l          print only matching log filenames
-  -M          color mode [auto|never|always] (default: {{.colorMode}})
-  -G colors   set colors (default: "{{.colors}}")
-              the order is query,match,path,separator; see ls(1) for color codes
 `[1:]))
 
 var grepCmd = command{
@@ -42,30 +39,20 @@ var grepCmd = command{
 }
 
 var (
+	queryIsRegexp bool
+	ored          bool
+	filenamesOnly bool
 	contextAfter  int
 	contextBefore int
 	builders      []string
 	categories    []string
 	origins       []string
 	names         []string
-	queryIsRegexp bool
-	ored          bool
-	filenamesOnly bool
-	colorMode     = colorModeAuto
-	colors        = format.DefaultColors
-)
-
-const (
-	colorModeAuto   = "auto"
-	colorModeAlways = "always"
-	colorModeNever  = "never"
 )
 
 func showGrepUsage() {
 	err := grepUsageTmpl.Execute(os.Stdout, map[string]any{
-		"progname":  progname,
-		"colorMode": colorMode,
-		"colors":    colors,
+		"progname": progname,
 	})
 	if err != nil {
 		panic(fmt.Sprintf("error executing template %s: %v", grepUsageTmpl.Name(), err))
@@ -73,11 +60,7 @@ func showGrepUsage() {
 }
 
 func runGrep(args []string) int {
-	if val, ok := os.LookupEnv("FALLOUT_COLORS"); ok && val != "" {
-		colors = val
-	}
-
-	opts, err := getopt.NewArgv("hA:B:C:b:c:o:n:xOlM:G:", args)
+	opts, err := getopt.NewArgv("hxOlA:B:C:b:c:o:n:", argsWithDefaults(args, "FALLOUT_GREP_OPTS"))
 	if err != nil {
 		panic(fmt.Sprintf("error creating options parser: %s", err))
 	}
@@ -92,6 +75,12 @@ func runGrep(args []string) int {
 		case 'h':
 			showGrepUsage()
 			os.Exit(0)
+		case 'x':
+			queryIsRegexp = true
+		case 'O':
+			ored = true
+		case 'l':
+			filenamesOnly = true
 		case 'A':
 			v, err := opt.Int()
 			if err != nil {
@@ -119,23 +108,8 @@ func runGrep(args []string) int {
 			origins = splitOptions(opt.String())
 		case 'n':
 			names = splitOptions(opt.String())
-		case 'x':
-			queryIsRegexp = true
-		case 'O':
-			ored = true
-		case 'l':
-			filenamesOnly = true
-		case 'M':
-			switch opt.String() {
-			case colorModeAuto:
-			case colorModeNever:
-			case colorModeAlways:
-				colorMode = opt.String()
-			default:
-				errExit("invalid color mode: %s", opt.String())
-			}
-		case 'G':
-			colors = opt.String()
+		default:
+			panic("unhandled option: -" + string(opt.Opt))
 		}
 	}
 

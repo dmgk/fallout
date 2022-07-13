@@ -7,6 +7,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/dmgk/fallout/format"
 	"github.com/dmgk/getopt"
 )
 
@@ -15,27 +16,40 @@ const (
 )
 
 var usageTmpl = template.Must(template.New("usage").Parse(`
-usage: {{.progname}} [-hV] command [options]
+usage: {{.progname}} [-hV] [-M mode] [-G colors] command [options]
 
 Download and search fallout logs.
 
 Options:
   -h          show help and exit
   -V          show version and exit
+  -M mode     color mode [auto|never|always] (default: {{.colorMode}})
+  -G colors   set colors (default: "{{.colors}}")
+              the order is query,match,path,separator; see ls(1) for color codes
 
 Commands (pass -h for command help):{{range .cmds}}
   {{.Name | printf "%-11s"}} {{.Summary}}{{end}}
 `[1:]))
 
 var (
-	progname string
-	version  = "devel"
+	progname  string
+	version   = "devel"
+	colorMode = colorModeAuto
+	colors    = format.DefaultColors
+)
+
+const (
+	colorModeAuto   = "auto"
+	colorModeAlways = "always"
+	colorModeNever  = "never"
 )
 
 func showUsage() {
 	err := usageTmpl.Execute(os.Stdout, map[string]any{
-		"progname": progname,
-		"cmds":     cmds,
+		"progname":  progname,
+		"colorMode": colorMode,
+		"colors":    colors,
+		"cmds":      cmds,
 	})
 	if err != nil {
 		panic(fmt.Sprintf("error executing template %s: %v", usageTmpl.Name(), err))
@@ -66,7 +80,11 @@ var cmds = []*command{
 }
 
 func main() {
-	opts, err := getopt.New("hV")
+	if v, ok := os.LookupEnv("FALLOUT_COLORS"); ok && v != "" {
+		colors = v
+	}
+
+	opts, err := getopt.NewArgv("hVM:G:", argsWithDefaults(os.Args, "FALLOUT_OPTS"))
 	if err != nil {
 		panic(fmt.Sprintf("error creating options parser: %s", err))
 	}
@@ -85,6 +103,15 @@ func main() {
 		case 'V':
 			showVersion()
 			os.Exit(0)
+		case 'M':
+			switch opt.String() {
+			case colorModeAuto, colorModeNever, colorModeAlways:
+				colorMode = opt.String()
+			default:
+				errExit("invalid color mode: %s", opt.String())
+			}
+		case 'G':
+			colors = opt.String()
 		default:
 			panic("unhandled option: -" + string(opt.Opt))
 		}
@@ -109,6 +136,14 @@ func main() {
 	}
 
 	os.Exit(cmd.run(args))
+}
+
+func argsWithDefaults(argv []string, env string) []string {
+	args := argv[1:]
+	if v, ok := os.LookupEnv(env); ok && v != "" {
+		args = append(splitOptions(v), args...)
+	}
+	return append([]string{argv[0]}, args...)
 }
 
 func splitOptions(s string) []string {
