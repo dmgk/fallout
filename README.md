@@ -9,64 +9,68 @@ Download and search FreeBSD build cluster fallout logs.
 #### Usage
 
 ```
-usage: fallout [-hv] command [options]
+usage: fallout [-hV] [-M mode] [-G colors] command [options]
 
 Download and search fallout logs.
 
 Options:
-  -h          show help and exit
-  -V          show version and exit
+  -h              show help and exit
+  -V              show version and exit
+  -M mode         color mode [auto|never|always] (default: auto)
+  -G colors       set colors (default: "BCDA")
+                  the order is query,match,path,separator; see ls(1) for color codes
 
 Commands (pass -h for command help):
-  fetch       download fallout logs
-  grep        search fallout logs
-  clean       clean log cache
+  fetch           download fallout logs
+  grep            search fallout logs
+  clean           clean log cache
 ```
 
 ```
-usage: fallout fetch [-h] [-d days] [-a date] [-n count]
+usage: fallout fetch [-h] [-D days] [-A date] [-N count] [-b builder[,builder]] [-c category[,category]] [-o origin[,origin]] [-n name[,name]]
 
 Download and cache fallout logs.
 
 Options:
-  -h          show help and exit
-  -d days     download logs for the last days (default: 7)
-  -a date     download only logs after this date, in RFC-3339 format (default: 2022-07-05)
-  -n count    download only recent count logs
+  -h              show help and exit
+  -D days         download logs for the last days (default: 7)
+  -A date         download only logs after this date, in RFC-3339 format (default: 2022-07-07)
+  -N count        download only recent count logs
+  -b builder,...  download only this builder logs
+  -c category,... download only logs for these categories
+  -o origin,...   download only logs for these origins
+  -n name,...     download only logs for these port names
 ```
 
 ```
-usage: fallout grep [-hx] [-A count] [-B count] [-C count] [-b builder[,builder]] [-c category[,category]] [-o origin[,origin]] [-n name[,name]] query [query ...]
+usage: fallout grep [-hxOl] [-A count] [-B count] [-C count] [-b builder[,builder]] [-c category[,category]] [-o origin[,origin]] [-n name[,name]] query [query ...]
 
 Search cached fallout logs.
 
 Options:
-  -h          show help and exit
-  -A count    show count lines of context after match
-  -B count    show count lines of context before match
-  -C count    show count lines of context around match
-  -b builder  limit search only to this builder
-  -c category limit search only to this category
-  -o origin   limit search only to this origin
-  -n name     limit search only to this port name
-  -x          treat query as a regular expression
-  -O          multiple queries are OR-ed (default: AND-ed)
-  -l          print only matching log filenames
-  -M          color mode [auto|never|always] (default: auto)
-  -G colors   set colors (default: "BCDA")
-              the order is query,match,path,separator; see ls(1) for color codes
+  -h              show help and exit
+  -x              treat query as a regular expression
+  -O              multiple queries are OR-ed (default: AND-ed)
+  -l              print only matching log filenames
+  -A count        show count lines of context after match
+  -B count        show count lines of context before match
+  -C count        show count lines of context around match
+  -b builder,...  limit search only to these builders
+  -c category,... limit search only to these categories
+  -o origin,...   limit search only to these origins
+  -n name,...     limit search only to these port names
 ```
 
 ```
-usage: fallout clean [-hx] [-d days] [-a date]
+usage: fallout clean [-hx] [-D days] [-A date]
 
 Clean log cache.
 
 Options:
   -h          show help and exit
-  -d days     remove logs that are more than days old (default: 30)
-  -a date     remove logs that are older than date, in RFC-3339 format (default: 2022-06-12)
   -x          remove all cached data
+  -D days     remove logs that are more than days old (default: 30)
+  -A date     remove logs that are older than date, in RFC-3339 format (default: 2022-06-14)
 ```
 
 #### Examples:
