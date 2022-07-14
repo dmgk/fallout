@@ -21,21 +21,25 @@ usage: {{.progname}} [-hV] [-M mode] [-G colors] command [options]
 Download and search fallout logs.
 
 Options:
-  -h          show help and exit
-  -V          show version and exit
-  -M mode     color mode [auto|never|always] (default: {{.colorMode}})
-  -G colors   set colors (default: "{{.colors}}")
-              the order is query,match,path,separator; see ls(1) for color codes
+  -h              show help and exit
+  -V              show version and exit
+  -M mode         color mode [auto|never|always] (default: {{.colorMode}})
+  -G colors       set colors (default: "{{.colors}}")
+                  the order is query,match,path,separator; see ls(1) for color codes
 
 Commands (pass -h for command help):{{range .cmds}}
-  {{.Name | printf "%-11s"}} {{.Summary}}{{end}}
+  {{.Name | printf "%-15s"}} {{.Summary}}{{end}}
 `[1:]))
 
 var (
-	progname  string
-	version   = "devel"
-	colorMode = colorModeAuto
-	colors    = format.DefaultColors
+	progname   string
+	version    = "devel"
+	colorMode  = colorModeAuto
+	colors     = format.DefaultColors
+	builders   []string
+	categories []string
+	origins    []string
+	names      []string
 )
 
 const (

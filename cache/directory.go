@@ -81,10 +81,10 @@ func newEntry(c *Directory, builder, origin string, timestamp time.Time) (*Direc
 	}
 	return &DirectoryEntry{
 		cache:     c,
-		path:      filepath.Join(c.path, builder, origin, timestamp.Format(timestampFormat)) + ext,
+		path:      filepath.Join(c.path, builder, origin, timestamp.UTC().Format(timestampFormat)) + ext,
 		builder:   builder,
 		origin:    origin,
-		timestamp: timestamp,
+		timestamp: timestamp.UTC(),
 	}, nil
 }
 
@@ -155,16 +155,19 @@ func (e *DirectoryEntry) Info() EntryInfo {
 }
 
 func (c *Directory) Walker(filter *Filter) Walker {
-	return &DirectoryWalker{
-		cache:  c,
-		filter: filter,
+	w := &DirectoryWalker{
+		cache: c,
 	}
+	if filter != nil {
+		w.filter = *filter
+	}
+	return w
 }
 
 // DirectoryWalker implements filesystem cache Walker.
 type DirectoryWalker struct {
+	filter Filter
 	cache  *Directory
-	filter *Filter
 }
 
 func (w *DirectoryWalker) Walk(wfn WalkFunc) error {
@@ -201,6 +204,22 @@ func (w *DirectoryWalker) Walk(wfn WalkFunc) error {
 	return nil
 }
 
+func (w *DirectoryWalker) builderAllowed(builder string) bool {
+	return valueAllowed(builder, w.filter.Builders)
+}
+
+func (w *DirectoryWalker) categoryAllowed(category string) bool {
+	return valueAllowed(category, w.filter.Categories)
+}
+
+func (w *DirectoryWalker) originAllowed(origin string) bool {
+	return valueAllowed(origin, w.filter.Origins)
+}
+
+func (w *DirectoryWalker) nameAllowed(name string) bool {
+	return valueAllowed(name, w.filter.Names)
+}
+
 func valueAllowed(value string, filter []string) bool {
 	if len(filter) == 0 {
 		return true
@@ -213,34 +232,6 @@ func valueAllowed(value string, filter []string) bool {
 	return false
 }
 
-func builderAllowed(builder string, f *Filter) bool {
-	if f == nil {
-		return true
-	}
-	return valueAllowed(builder, f.Builders)
-}
-
-func categoryAllowed(category string, f *Filter) bool {
-	if f == nil {
-		return true
-	}
-	return valueAllowed(category, f.Categories)
-}
-
-func originAllowed(origin string, f *Filter) bool {
-	if f == nil {
-		return true
-	}
-	return valueAllowed(origin, f.Origins)
-}
-
-func nameAllowed(name string, f *Filter) bool {
-	if f == nil {
-		return true
-	}
-	return valueAllowed(name, f.Names)
-}
-
 func (w *DirectoryWalker) walkCache(rch chan Entry, ech chan error) {
 	defer close(rch)
 	defer close(ech)
@@ -251,7 +242,7 @@ func (w *DirectoryWalker) walkCache(rch chan Entry, ech chan error) {
 		return
 	}
 	for _, d := range dir {
-		if d.IsDir() && builderAllowed(d.Name(), w.filter) {
+		if d.IsDir() && w.builderAllowed(d.Name()) {
 			w.walkBuilder(d.Name(), rch, ech)
 		}
 	}
@@ -264,7 +255,7 @@ func (w *DirectoryWalker) walkBuilder(builder string, rch chan Entry, ech chan e
 		return
 	}
 	for _, d := range dir {
-		if d.IsDir() && categoryAllowed(d.Name(), w.filter) {
+		if d.IsDir() && w.categoryAllowed(d.Name()) {
 			w.walkCategory(builder, d.Name(), rch, ech)
 		}
 	}
@@ -278,7 +269,7 @@ func (w *DirectoryWalker) walkCategory(builder, category string, rch chan Entry,
 	}
 	for _, d := range dir {
 		origin := category + string(filepath.Separator) + d.Name()
-		if d.IsDir() && originAllowed(origin, w.filter) && nameAllowed(d.Name(), w.filter) {
+		if d.IsDir() && w.originAllowed(origin) && w.nameAllowed(d.Name()) {
 			w.walkOrigin(builder, origin, rch, ech)
 		}
 	}
@@ -316,15 +307,15 @@ func loadTimestamp(path string) time.Time {
 	var zero time.Time
 	if buf, err := os.ReadFile(filepath.Join(path, cacheTimestampName)); err == nil {
 		if ts, err := time.Parse(cacheTimestampFormat, string(buf)); err == nil {
-			return ts
+			return ts.UTC()
 		}
 	}
 	return zero
 }
 
 func (c *Directory) updateTimestamp(ts time.Time) {
-	if ts.After(c.timestamp) {
-		c.timestamp = ts
+	if ts.UTC().After(c.timestamp) {
+		c.timestamp = ts.UTC()
 		_ = os.WriteFile(filepath.Join(c.path, cacheTimestampName), []byte(ts.Format(cacheTimestampFormat)), 0664)
 	}
 }

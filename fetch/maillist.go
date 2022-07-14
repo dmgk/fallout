@@ -14,6 +14,7 @@ import (
 
 // Maillist implements Fetcher that scrapes logs from pkg-fallout mail list archives.
 type Maillist struct {
+	filter    Filter
 	collector *colly.Collector
 }
 
@@ -21,18 +22,22 @@ func NewMaillist(userAgent string) Fetcher {
 	c := colly.NewCollector(
 		colly.UserAgent(userAgent),
 	)
-
-	return &Maillist{collector: c}
+	return &Maillist{
+		collector: c,
+	}
 }
 
-func (f *Maillist) Fetch(options *Options, qfn QueryFunc, rfn ResultFunc) error {
+func (f *Maillist) Fetch(filter *Filter, qfn QueryFunc, rfn ResultFunc) error {
+	if filter != nil {
+		f.filter = *filter
+	}
 	rch := make(chan *Result)
 	ech := make(chan error)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go f.fetchMaillist(ctx, options, qfn, rch, ech)
+	go f.fetchMaillist(ctx, qfn, rch, ech)
 
 	rok := true
 	for rok {
@@ -71,7 +76,7 @@ var (
 
 // fetchMaillists scrapes fallout logs from pkg-fallout mail list archive pages.
 // NOTE: keep this code non-parallel to avoid spurious 503 Service Unavailable from lists.freebsd.org.
-func (f *Maillist) fetchMaillist(ctx context.Context, options *Options, qfn QueryFunc, rch chan *Result, ech chan error) {
+func (f *Maillist) fetchMaillist(ctx context.Context, qfn QueryFunc, rch chan *Result, ech chan error) {
 	resMap := make(map[string]*Result)
 	count := 0
 
@@ -105,7 +110,7 @@ func (f *Maillist) fetchMaillist(ctx context.Context, options *Options, qfn Quer
 				return
 			}
 			mi := ts.UTC().Year()*100 + int(ts.UTC().Month())
-			ma := options.After.UTC().Year()*100 + int(options.After.UTC().Month())
+			ma := f.filter.After.UTC().Year()*100 + int(f.filter.After.UTC().Month())
 			if mi < ma {
 				cancel() // link is to the month before "After", stop
 				return
@@ -129,7 +134,7 @@ func (f *Maillist) fetchMaillist(ctx context.Context, options *Options, qfn Quer
 			})
 			for _, r := range resSlice {
 				count++
-				if options.Limit > 0 && count > options.Limit {
+				if f.filter.Limit > 0 && count > f.filter.Limit {
 					break // limit is reached
 				}
 				// fetch fallout log, unless it was already cached
@@ -162,15 +167,24 @@ func (f *Maillist) fetchMaillist(ctx context.Context, options *Options, qfn Quer
 				//
 				// We're assuming this page is a message index, in the ascending order by the message date.
 
-				var res Result
+				var builder, origin, category, name, url string
+				var ts time.Time
+				var err error
 
 				// extract builder and origin name from the "a" text
 				m := builderAndOriginRe.FindAllStringSubmatch(e.ChildText("a"), -1)
 				if len(m) == 0 {
 					return // wrong "li", skip
 				}
-				res.Builder = m[0][1]
-				res.Origin = m[0][2]
+				builder = m[0][1]
+				origin = m[0][2]
+				if cn := strings.Split(origin, "/"); len(cn) == 2 {
+					category, name = cn[0], cn[1]
+				}
+
+				if !(f.builderAllowed(builder) && f.originAllowed(origin) && f.categoryAllowed(category) && f.nameAllowed(name)) {
+					return // did not pass the filter
+				}
 
 				// extract log timestamp from the "i" text
 				m = timestampRe.FindAllStringSubmatch(e.ChildText("i"), -1)
@@ -178,26 +192,30 @@ func (f *Maillist) fetchMaillist(ctx context.Context, options *Options, qfn Quer
 					ech <- fmt.Errorf("no timestamp in message title: %s", e.ChildText("i"))
 					return
 				}
-				ts, err := time.Parse(time.RFC1123, m[0][1])
+				ts, err = time.Parse(time.RFC1123, m[0][1])
 				if err != nil {
 					ech <- err
 					return
 				}
-				if ts.UTC().Before(options.After.UTC()) {
+				if ts.UTC().Before(f.filter.After.UTC()) {
 					return // timestamp is before "After", skip
 				}
-				res.Timestamp = ts
 
 				// extract log page URL
 				u := *e.Request.URL
 				u.Path = path.Join(u.Path, e.ChildAttr("a", "href"))
-				res.URL = u.String()
+				url = u.String()
 
 				// stash partial result, Content will be filled later by the archive page handler
-				if _, ok := resMap[res.URL]; ok {
-					ech <- fmt.Errorf("duplicate log: %s", res.URL)
+				if _, ok := resMap[url]; ok {
+					ech <- fmt.Errorf("duplicate log: %s", url)
 				} else {
-					resMap[res.URL] = &res
+					resMap[url] = &Result{
+						Builder:   builder,
+						Origin:    origin,
+						Timestamp: ts.UTC(),
+						URL:       url,
+					}
 				}
 			}
 		}
@@ -237,4 +255,32 @@ func (f *Maillist) fetchMaillist(ctx context.Context, options *Options, qfn Quer
 	})
 
 	f.collector.Visit(baseUrl)
+}
+
+func (f *Maillist) builderAllowed(builder string) bool {
+	return valueAllowed(builder, f.filter.Builders)
+}
+
+func (f *Maillist) categoryAllowed(category string) bool {
+	return valueAllowed(category, f.filter.Categories)
+}
+
+func (f *Maillist) originAllowed(origin string) bool {
+	return valueAllowed(origin, f.filter.Origins)
+}
+
+func (f *Maillist) nameAllowed(name string) bool {
+	return valueAllowed(name, f.filter.Names)
+}
+
+func valueAllowed(value string, filter []string) bool {
+	if len(filter) == 0 {
+		return true
+	}
+	for _, s := range filter {
+		if strings.Contains(value, s) {
+			return true
+		}
+	}
+	return false
 }

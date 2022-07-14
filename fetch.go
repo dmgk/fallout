@@ -13,15 +13,19 @@ import (
 )
 
 var fetchUsageTmpl = template.Must(template.New("usage-fetch").Parse(`
-usage: {{.progname}} fetch [-h] [-d days] [-a date] [-n count]
+usage: {{.progname}} fetch [-h] [-D days] [-A date] [-N count] [-b builder[,builder]] [-c category[,category]] [-o origin[,origin]] [-n name[,name]]
 
 Download and cache fallout logs.
 
 Options:
-  -h          show help and exit
-  -d days     download logs for the last days (default: {{.daysLimit}})
-  -a date     download only logs after this date, in RFC-3339 format (default: {{.dateLimit.Format .dateFormat}})
-  -n count    download only recent count logs
+  -h              show help and exit
+  -D days         download logs for the last days (default: {{.daysLimit}})
+  -A date         download only logs after this date, in RFC-3339 format (default: {{.dateLimit.Format .dateFormat}})
+  -N count        download only recent count logs
+  -b builder,...  download only this builder logs
+  -c category,... download only logs for these categories
+  -o origin,...   download only logs for these origins
+  -n name,...     download only logs for these port names
 `[1:]))
 
 var fetchCmd = command{
@@ -51,7 +55,7 @@ func showFetchUsage() {
 }
 
 func runFetch(args []string) int {
-	opts, err := getopt.NewArgv("hd:a:n:", argsWithDefaults(args, "FALLOUT_FETCH_OPTS"))
+	opts, err := getopt.NewArgv("hD:A:N:b:c:o:n:", argsWithDefaults(args, "FALLOUT_FETCH_OPTS"))
 	if err != nil {
 		panic(fmt.Sprintf("error creating options parser: %s", err))
 	}
@@ -66,14 +70,14 @@ func runFetch(args []string) int {
 		case 'h':
 			showFetchUsage()
 			os.Exit(0)
-		case 'd':
+		case 'D':
 			v, err := opt.Int()
 			if err != nil {
 				errExit(err.Error())
 			}
 			fetchDateLimit = time.Now().UTC().AddDate(0, 0, -v)
 			onlyNew = false
-		case 'a':
+		case 'A':
 			t, err := time.Parse(dateFormat, opt.String())
 			if err != nil {
 				errExit(err.Error())
@@ -83,12 +87,20 @@ func runFetch(args []string) int {
 			}
 			fetchDateLimit = t
 			onlyNew = false
-		case 'n':
+		case 'N':
 			v, err := opt.Int()
 			if err != nil {
 				errExit(err.Error())
 			}
 			fetchCountLimit = v
+		case 'b':
+			builders = splitOptions(opt.String())
+		case 'c':
+			categories = splitOptions(opt.String())
+		case 'o':
+			origins = splitOptions(opt.String())
+		case 'n':
+			names = splitOptions(opt.String())
 		default:
 			panic("unhandled option: -" + string(opt.Opt))
 		}
@@ -101,12 +113,16 @@ func runFetch(args []string) int {
 	}
 
 	f := fetch.NewMaillist(fmt.Sprintf("%s/%s", progname, version))
-	o := &fetch.Options{
-		After: fetchDateLimit,
-		Limit: fetchCountLimit,
+	fflt := &fetch.Filter{
+		After:      fetchDateLimit,
+		Limit:      fetchCountLimit,
+		Builders:   builders,
+		Categories: categories,
+		Origins:    origins,
+		Names:      names,
 	}
-	if onlyNew {
-		o.After = c.Timestamp()
+	if onlyNew && !c.Timestamp().IsZero() {
+		fflt.After = c.Timestamp()
 	}
 
 	qfn := func(res *fetch.Result) (bool, error) {
@@ -142,7 +158,7 @@ func runFetch(args []string) int {
 		return nil
 	}
 
-	if err := f.Fetch(o, qfn, rfn); err != nil {
+	if err := f.Fetch(fflt, qfn, rfn); err != nil {
 		errExit("fetch error: %s", err)
 		return 1
 	}

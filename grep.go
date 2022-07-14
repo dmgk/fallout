@@ -19,17 +19,17 @@ usage: {{.progname}} grep [-hxOl] [-A count] [-B count] [-C count] [-b builder[,
 Search cached fallout logs.
 
 Options:
-  -h          show help and exit
-  -x          treat query as a regular expression
-  -O          multiple queries are OR-ed (default: AND-ed)
-  -l          print only matching log filenames
-  -A count    show count lines of context after match
-  -B count    show count lines of context before match
-  -C count    show count lines of context around match
-  -b builder  limit search only to this builder
-  -c category limit search only to this category
-  -o origin   limit search only to this origin
-  -n name     limit search only to this port name
+  -h              show help and exit
+  -x              treat query as a regular expression
+  -O              multiple queries are OR-ed (default: AND-ed)
+  -l              print only matching log filenames
+  -A count        show count lines of context after match
+  -B count        show count lines of context before match
+  -C count        show count lines of context around match
+  -b builder,...  limit search only to these builders
+  -c category,... limit search only to these categories
+  -o origin,...   limit search only to these origins
+  -n name,...     limit search only to these port names
 `[1:]))
 
 var grepCmd = command{
@@ -44,10 +44,6 @@ var (
 	filenamesOnly bool
 	contextAfter  int
 	contextBefore int
-	builders      []string
-	categories    []string
-	origins       []string
-	names         []string
 )
 
 func showGrepUsage() {
@@ -118,18 +114,18 @@ func runGrep(args []string) int {
 		errExit("error initializing cache: %s", err)
 	}
 
-	f := &cache.Filter{
+	cflt := &cache.Filter{
 		Builders:   builders,
 		Categories: categories,
 		Origins:    origins,
 		Names:      names,
 	}
-	w := c.Walker(f)
+	w := c.Walker(cflt)
 	g := grep.New(w)
 
 	fm := initFormatter()
 
-	o := &grep.Options{
+	gopt := &grep.Options{
 		ContextAfter:  contextAfter,
 		ContextBefore: contextBefore,
 		QueryIsRegexp: queryIsRegexp,
@@ -141,7 +137,7 @@ func runGrep(args []string) int {
 		return fm.Format(entry, res)
 	}
 
-	if err := g.Grep(o, opts.Args(), gfn); err != nil {
+	if err := g.Grep(gopt, opts.Args(), gfn); err != nil {
 		errExit("grep error: %s", err)
 		return 1
 	}

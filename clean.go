@@ -11,15 +11,15 @@ import (
 )
 
 var cleanUsageTmpl = template.Must(template.New("usage-clean").Parse(`
-usage: {{.progname}} clean [-hx] [-d days] [-a date]
+usage: {{.progname}} clean [-hx] [-D days] [-A date]
 
 Clean log cache.
 
 Options:
   -h          show help and exit
-  -d days     remove logs that are more than days old (default: {{.daysLimit}})
-  -a date     remove logs that are older than date, in RFC-3339 format (default: {{.dateLimit.Format .dateFormat}})
   -x          remove all cached data
+  -D days     remove logs that are more than days old (default: {{.daysLimit}})
+  -A date     remove logs that are older than date, in RFC-3339 format (default: {{.dateLimit.Format .dateFormat}})
 `[1:]))
 
 var cleanCmd = command{
@@ -48,7 +48,7 @@ func showCleanUsage() {
 }
 
 func runClean(args []string) int {
-	opts, err := getopt.NewArgv("hd:a:x", args)
+	opts, err := getopt.NewArgv("hxD:A:", args)
 	if err != nil {
 		panic(fmt.Sprintf("error creating options parser: %s", err))
 	}
@@ -63,13 +63,15 @@ func runClean(args []string) int {
 		case 'h':
 			showCleanUsage()
 			os.Exit(0)
-		case 'd':
+		case 'x':
+			allClean = true
+		case 'D':
 			v, err := opt.Int()
 			if err != nil {
 				errExit(err.Error())
 			}
 			cleanDateLimit = time.Now().UTC().AddDate(0, 0, -v)
-		case 'a':
+		case 'A':
 			t, err := time.Parse(dateFormat, opt.String())
 			if err != nil {
 				errExit(err.Error())
@@ -78,8 +80,6 @@ func runClean(args []string) int {
 				errExit("date in the future: %s", t.Format(dateFormat))
 			}
 			cleanDateLimit = t
-		case 'x':
-			allClean = true
 		}
 	}
 

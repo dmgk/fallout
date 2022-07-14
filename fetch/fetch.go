@@ -11,15 +11,23 @@ type Fetcher interface {
 	// Fetch logs and download logs for which qfn returns false.
 	// If qfn returns true, then the log is assumed to be already cached.
 	// Call rfn for each downloaded log.
-	Fetch(options *Options, qfn QueryFunc, rfn ResultFunc) error
+	Fetch(filter *Filter, qfn QueryFunc, rfn ResultFunc) error
 }
 
-// Options holds fetcher filter options.
-type Options struct {
+// Filter holds fetcher filter options.
+type Filter struct {
 	// Download only logs created after this date.
 	After time.Time
 	// Download only this many most recent logs.
 	Limit int
+	// Allowed builder names, partial names are ok.
+	Builders []string
+	// Allowed categories, partial names are ok.
+	Categories []string
+	// Allowed origins, partial names are ok.
+	Origins []string
+	// Allowed port names, partial names are ok.
+	Names []string
 }
 
 type QueryFunc func(res *Result) (bool, error)
