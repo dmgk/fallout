@@ -13,13 +13,12 @@ import (
 )
 
 var fetchUsageTmpl = template.Must(template.New("usage-fetch").Parse(`
-usage: {{.progname}} fetch [-hN] [-d days] [-a date] [-n count]
+usage: {{.progname}} fetch [-h] [-d days] [-a date] [-n count]
 
 Download and cache fallout logs.
 
 Options:
   -h          show help and exit
-  -N          download only new logs appeared since the last fetch
   -d days     download logs for the last days (default: {{.daysLimit}})
   -a date     download only logs after this date, in RFC-3339 format (default: {{.dateLimit.Format .dateFormat}})
   -n count    download only recent count logs
@@ -34,9 +33,9 @@ var fetchCmd = command{
 const defaultFetchDaysLimit = 7
 
 var (
-	onlyNew         bool
 	fetchCountLimit int
 	fetchDateLimit  = time.Now().UTC().AddDate(0, 0, -defaultFetchDaysLimit)
+	onlyNew         = true
 )
 
 func showFetchUsage() {
@@ -52,7 +51,7 @@ func showFetchUsage() {
 }
 
 func runFetch(args []string) int {
-	opts, err := getopt.NewArgv("hNd:a:n:", argsWithDefaults(args, "FALLOUT_FETCH_OPTS"))
+	opts, err := getopt.NewArgv("hd:a:n:", argsWithDefaults(args, "FALLOUT_FETCH_OPTS"))
 	if err != nil {
 		panic(fmt.Sprintf("error creating options parser: %s", err))
 	}
@@ -67,14 +66,13 @@ func runFetch(args []string) int {
 		case 'h':
 			showFetchUsage()
 			os.Exit(0)
-		case 'N':
-			onlyNew = true
 		case 'd':
 			v, err := opt.Int()
 			if err != nil {
 				errExit(err.Error())
 			}
 			fetchDateLimit = time.Now().UTC().AddDate(0, 0, -v)
+			onlyNew = false
 		case 'a':
 			t, err := time.Parse(dateFormat, opt.String())
 			if err != nil {
@@ -84,6 +82,7 @@ func runFetch(args []string) int {
 				errExit("date in the future: %s", t.Format(dateFormat))
 			}
 			fetchDateLimit = t
+			onlyNew = false
 		case 'n':
 			v, err := opt.Int()
 			if err != nil {
@@ -115,7 +114,13 @@ func runFetch(args []string) int {
 		if err != nil {
 			return false, err
 		}
-		return e.Exists(), nil
+		if e.Exists() {
+			if !onlyNew {
+				fmt.Fprintf(os.Stdout, "%s (cached)\n", res)
+			}
+			return true, nil
+		}
+		return false, nil
 	}
 
 	rfn := func(res *fetch.Result, err error) error {
