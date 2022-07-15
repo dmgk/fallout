@@ -258,27 +258,27 @@ func (f *Maillist) fetchMaillist(ctx context.Context, qfn QueryFunc, rch chan *R
 }
 
 func (f *Maillist) builderAllowed(builder string) bool {
-	return valueAllowed(builder, f.filter.Builders)
+	return valueAllowed(builder, f.filter.Builders, false)
 }
 
 func (f *Maillist) categoryAllowed(category string) bool {
-	return valueAllowed(category, f.filter.Categories)
+	return valueAllowed(category, f.filter.Categories, false)
 }
 
 func (f *Maillist) originAllowed(origin string) bool {
-	return valueAllowed(origin, f.filter.Origins)
+	return valueAllowed(origin, f.filter.Origins, true)
 }
 
 func (f *Maillist) nameAllowed(name string) bool {
-	return valueAllowed(name, f.filter.Names)
+	return valueAllowed(name, f.filter.Names, false)
 }
 
-func valueAllowed(value string, filter []string) bool {
+func valueAllowed(value string, filter []string, exact bool) bool {
 	if len(filter) == 0 {
 		return true
 	}
 	for _, s := range filter {
-		if strings.Contains(value, s) {
+		if exact && value == s || !exact && strings.Contains(value, s) {
 			return true
 		}
 	}

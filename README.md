@@ -112,7 +112,7 @@ $ fallout grep -b arm64 -l
 ##### Search by an arbitrary regex:
 
 ```sh
-$ fallout grep -C1 -o devel -x "\sundefined\s"
+$ fallout grep -C1 -c devel -x "\sundefined\s"
 /home/user/.cache/fallout/main-armv7-default/devel/cvs-devel/2022-07-11T22:14:29.log:
                                                      ^~~~~~~~~~~~~~~~~~~~
 mktime.c:211:56: warning: shifting a negative signed value is undefined [-Wshift-negative-value]

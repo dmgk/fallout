@@ -205,27 +205,27 @@ func (w *DirectoryWalker) Walk(wfn WalkFunc) error {
 }
 
 func (w *DirectoryWalker) builderAllowed(builder string) bool {
-	return valueAllowed(builder, w.filter.Builders)
+	return valueAllowed(builder, w.filter.Builders, false)
 }
 
 func (w *DirectoryWalker) categoryAllowed(category string) bool {
-	return valueAllowed(category, w.filter.Categories)
+	return valueAllowed(category, w.filter.Categories, false)
 }
 
 func (w *DirectoryWalker) originAllowed(origin string) bool {
-	return valueAllowed(origin, w.filter.Origins)
+	return valueAllowed(origin, w.filter.Origins, true)
 }
 
 func (w *DirectoryWalker) nameAllowed(name string) bool {
-	return valueAllowed(name, w.filter.Names)
+	return valueAllowed(name, w.filter.Names, false)
 }
 
-func valueAllowed(value string, filter []string) bool {
+func valueAllowed(value string, filter []string, exact bool) bool {
 	if len(filter) == 0 {
 		return true
 	}
 	for _, s := range filter {
-		if strings.Contains(value, s) {
+		if exact && value == s || !exact && strings.Contains(value, s) {
 			return true
 		}
 	}
