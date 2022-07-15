@@ -49,7 +49,7 @@ Search cached fallout logs.
 
 Options:
   -h              show help and exit
-  -x              treat query as a regular expression
+  -F              interpret query as a plain text, not regular expression
   -O              multiple queries are OR-ed (default: AND-ed)
   -l              print only matching log filenames
   -A count        show count lines of context after match
@@ -80,7 +80,7 @@ Run `fallout fetch` to download recent logs and then:
 ##### Search logs of broken USES=go ports across all builders:
 
 ```sh
-$ portgrep -u go -1 | ./fallout grep -C2 -x "\.go:\d+:\d+:"
+$ portgrep -u go -1 | ./fallout grep -C2 "\.go:\d+:\d+:"
 /home/dg/.cache/fallout/main-i386-default/security/honeytrap/2022-07-14T15:50:32.log:
 github.com/honeytrap/honeytrap/services/telnet
 # github.com/honeytrap/honeytrap/services/docker

@@ -21,7 +21,7 @@ Search cached fallout logs.
 
 Options:
   -h              show help and exit
-  -x              treat query as a regular expression
+  -F              interpret query as a plain text, not regular expression
   -O              multiple queries are OR-ed (default: AND-ed)
   -l              print only matching log filenames
   -A count        show count lines of context after match
@@ -40,7 +40,7 @@ var grepCmd = command{
 }
 
 var (
-	queryIsRegexp bool
+	queryIsRegexp = true
 	ored          bool
 	filenamesOnly bool
 	contextAfter  int
@@ -57,7 +57,7 @@ func showGrepUsage() {
 }
 
 func runGrep(args []string) int {
-	opts, err := getopt.NewArgv("hxOlA:B:C:b:c:o:n:", argsWithDefaults(args, "FALLOUT_GREP_OPTS"))
+	opts, err := getopt.NewArgv("hFOlA:B:C:b:c:o:n:", argsWithDefaults(args, "FALLOUT_GREP_OPTS"))
 	if err != nil {
 		panic(fmt.Sprintf("error creating options parser: %s", err))
 	}
@@ -72,8 +72,8 @@ func runGrep(args []string) int {
 		case 'h':
 			showGrepUsage()
 			os.Exit(0)
-		case 'x':
-			queryIsRegexp = true
+		case 'F':
+			queryIsRegexp = false
 		case 'O':
 			ored = true
 		case 'l':
