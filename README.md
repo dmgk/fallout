@@ -59,6 +59,7 @@ Options:
   -c category,... limit search only to these categories
   -o origin,...   limit search only to these origins
   -n name,...     limit search only to these port names
+  -j jobs         number of parallel jobs, -j1 outputs sorted results (default: 8)
 ```
 
 ```

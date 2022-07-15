@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"io"
 	"os"
+	"runtime"
 
 	"github.com/dmgk/fallout/cache"
 	"github.com/dmgk/fallout/format"
@@ -31,6 +32,7 @@ Options:
   -c category,... limit search only to these categories
   -o origin,...   limit search only to these origins
   -n name,...     limit search only to these port names
+  -j jobs         number of parallel jobs, -j1 outputs sorted results (default: {{.maxJobs}})
 `[1:]))
 
 var grepCmd = command{
@@ -45,11 +47,13 @@ var (
 	filenamesOnly bool
 	contextAfter  int
 	contextBefore int
+	maxJobs       = runtime.NumCPU()
 )
 
 func showGrepUsage() {
 	err := grepUsageTmpl.Execute(os.Stdout, map[string]any{
 		"progname": progname,
+		"maxJobs":  maxJobs,
 	})
 	if err != nil {
 		panic(fmt.Sprintf("error executing template %s: %v", grepUsageTmpl.Name(), err))
@@ -57,7 +61,7 @@ func showGrepUsage() {
 }
 
 func runGrep(args []string) int {
-	opts, err := getopt.NewArgv("hFOlA:B:C:b:c:o:n:", argsWithDefaults(args, "FALLOUT_GREP_OPTS"))
+	opts, err := getopt.NewArgv("hFOlA:B:C:b:c:o:n:j:", argsWithDefaults(args, "FALLOUT_GREP_OPTS"))
 	if err != nil {
 		panic(fmt.Sprintf("error creating options parser: %s", err))
 	}
@@ -105,6 +109,15 @@ func runGrep(args []string) int {
 			origins = splitOptions(opt.String())
 		case 'n':
 			names = splitOptions(opt.String())
+		case 'j':
+			v, err := opt.Int()
+			if err != nil {
+				errExit(err.Error())
+			}
+			if v <= 0 {
+				v = 1
+			}
+			maxJobs = v
 		default:
 			panic("unhandled option: -" + string(opt.Opt))
 		}
@@ -165,7 +178,7 @@ func runGrep(args []string) int {
 		return fm.Format(entry, res)
 	}
 
-	if err := g.Grep(gopt, opts.Args(), gfn); err != nil {
+	if err := g.Grep(gopt, opts.Args(), gfn, maxJobs); err != nil {
 		errExit("grep error: %s", err)
 		return 1
 	}

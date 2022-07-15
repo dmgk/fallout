@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
-	"runtime"
 	"sync"
 
 	"github.com/dmgk/fallout/cache"
@@ -54,7 +53,7 @@ type grepResult struct {
 }
 
 // Grep searches cached logs and calls gfn for each found match.
-func (g *Grepper) Grep(options *Options, queries []string, gfn GrepFunc) error {
+func (g *Grepper) Grep(options *Options, queries []string, gfn GrepFunc, jobs int) error {
 	var mrs []*matcher
 	for _, q := range queries {
 		m, err := newMatcher(options, q)
@@ -67,7 +66,7 @@ func (g *Grepper) Grep(options *Options, queries []string, gfn GrepFunc) error {
 	rch := make(chan *grepResult)
 	ech := make(chan error)
 
-	go g.walkCache(mrs, options.Ored, rch, ech, runtime.NumCPU())
+	go g.walkCache(mrs, options.Ored, rch, ech, jobs)
 
 	rok := true
 	for rok {
