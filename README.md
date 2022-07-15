@@ -36,7 +36,7 @@ Options:
   -D days         download logs for the last days (default: 7)
   -A date         download only logs after this date, in RFC-3339 format (default: 2022-07-07)
   -N count        download only recent count logs
-  -b builder,...  download only this builder logs
+  -b builder,...  download only logs from these builders
   -c category,... download only logs for these categories
   -o origin,...   download only logs for these origins
   -n name,...     download only logs for these port names
