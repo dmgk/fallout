@@ -15,7 +15,7 @@ import (
 )
 
 var grepUsageTmpl = template.Must(template.New("usage-grep").Parse(`
-usage: {{.progname}} grep [-hxOl] [-A count] [-B count] [-C count] [-b builder[,builder]] [-c category[,category]] [-o origin[,origin]] [-n name[,name]] query [query ...]
+usage: {{.progname}} grep [-hFOl] [-A count] [-B count] [-C count] [-b builder[,builder]] [-c category[,category]] [-o origin[,origin]] [-n name[,name]] query [query ...]
 
 Search cached fallout logs.
 

@@ -43,7 +43,7 @@ Options:
 ```
 
 ```
-usage: fallout grep [-hxOl] [-A count] [-B count] [-C count] [-b builder[,builder]] [-c category[,category]] [-o origin[,origin]] [-n name[,name]] query [query ...]
+usage: fallout grep [-hFOl] [-A count] [-B count] [-C count] [-b builder[,builder]] [-c category[,category]] [-o origin[,origin]] [-n name[,name]] query [query ...]
 
 Search cached fallout logs.
 
