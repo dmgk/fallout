@@ -132,8 +132,25 @@ func runGrep(args []string) int {
 		Names:      names,
 	}
 	w := c.Walker(cflt)
-	g := grep.New(w)
 
+	// no need to actually grep if no queries were provided and only filenames were requested
+	// simple cache walk is enough and also will output results ordered by builder/origin/timestamp
+	if len(opts.Args()) == 0 && filenamesOnly {
+		err = w.Walk(func(entry cache.Entry, err error) error {
+			if err != nil {
+				return err
+			}
+			fmt.Println(entry)
+			return nil
+		})
+		if err != nil {
+			errExit("error: %s", err)
+		}
+
+		return 0
+	}
+
+	g := grep.New(w)
 	fm := initFormatter()
 
 	gopt := &grep.Options{
