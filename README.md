@@ -77,14 +77,14 @@ Options:
 
 Run `fallout fetch` to download recent logs and then:
 
-Search logs of broken USES=go ports across all builders:
+##### Search logs of broken USES=go ports across all builders:
 
 ```sh
 $ portgrep -u go -1 | ./fallout grep -C2 -x "\.go:\d+:\d+:"
 /home/dg/.cache/fallout/main-i386-default/security/honeytrap/2022-07-14T15:50:32.log:
 github.com/honeytrap/honeytrap/services/telnet
 # github.com/honeytrap/honeytrap/services/docker
-services/docker/docker.go:405:23: cannot use 16348065792 (untyped int constant) as int value in map literal (overflows)
+services/docker/docker@@.go:405:23:@@ cannot use 16348065792 (untyped int constant) as int value in map literal (overflows)
 github.com/honeytrap/honeytrap/pushers/raven
 github.com/honeytrap/honeytrap/pushers/pulsar
 /home/dg/.cache/fallout/130arm64-quarterly/sysutils/aptly/2022-07-07T23:53:07.log:
@@ -96,7 +96,7 @@ vendor/golang.org/x/sys/unix/zerrors_freebsd_arm64.go:1804:1: syntax error: non-
 ...
 ```
 
-List logs for arm64 failures:
+##### List logs for arm64 failures:
 
 ```sh
 $ fallout grep -b arm64 -l
@@ -109,7 +109,7 @@ $ fallout grep -b arm64 -l
 ...
 ```
 
-Search by an arbitrary regex:
+##### Search by an arbitrary regex:
 
 ```sh
 $ fallout grep -C1 -o devel -x "\sundefined\s"
