@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"html/template"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"github.com/dmgk/fallout/cache"
 	"github.com/dmgk/fallout/fetch"
 	"github.com/dmgk/getopt"
+	"github.com/mattn/go-isatty"
 )
 
 var fetchUsageTmpl = template.Must(template.New("usage-fetch").Parse(`
@@ -103,6 +105,16 @@ func runFetch(args []string) int {
 			names = splitOptions(opt.String())
 		default:
 			panic("unhandled option: -" + string(opt.Opt))
+		}
+	}
+
+	// read origins from stdin if it's not a tty
+	// this allows easy feeding origins from e.g. portgrep: `portgrep -u go -1 | fallout fetch -D14`
+	if !isatty.IsTerminal(os.Stdin.Fd()) {
+		sc := bufio.NewScanner(os.Stdin)
+		sc.Split(bufio.ScanWords)
+		for sc.Scan() {
+			origins = append(origins, sc.Text())
 		}
 	}
 

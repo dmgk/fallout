@@ -77,16 +77,22 @@ Options:
 
 Run `fallout fetch` to download recent logs and then:
 
-List logs for broken USES=go ports across all builders:
+Search logs of broken USES=go ports across all builders:
 
 ```sh
-$ fallout grep -o "$(portgrep -u go -1)" -l
-/home/user/.cache/fallout/main-i386-default/security/vaultwarden/2022-07-05T12:51:26.log
-/home/user/.cache/fallout/main-i386-default/sysutils/minikube/2022-07-05T05:26:17.log
-/home/user/.cache/fallout/main-i386-default/www/minio/2022-07-09T23:14:53.log
-/home/user/.cache/fallout/main-amd64-default/databases/mongodb36-tools/2022-07-12T07:04:35.log
-/home/user/.cache/fallout/130i386-quarterly/security/vaultwarden/2022-07-10T14:02:29.log
-/home/user/.cache/fallout/130i386-quarterly/www/minio/2022-07-07T01:49:12.log
+$ portgrep -u go -1 | ./fallout grep -C2 -x "\.go:\d+:\d+:"
+/home/dg/.cache/fallout/main-i386-default/security/honeytrap/2022-07-14T15:50:32.log:
+github.com/honeytrap/honeytrap/services/telnet
+# github.com/honeytrap/honeytrap/services/docker
+services/docker/docker.go:405:23: cannot use 16348065792 (untyped int constant) as int value in map literal (overflows)
+github.com/honeytrap/honeytrap/pushers/raven
+github.com/honeytrap/honeytrap/pushers/pulsar
+/home/dg/.cache/fallout/130arm64-quarterly/sysutils/aptly/2022-07-07T23:53:07.log:
+google.golang.org/protobuf/reflect/protoreflect
+# golang.org/x/sys/unix
+vendor/golang.org/x/sys/unix/syscall_freebsd_arm64.go:60:1: syntax error: non-declaration statement outside function body
+vendor/golang.org/x/sys/unix/zerrors_freebsd_arm64.go:1798:3: misplaced compiler directive
+vendor/golang.org/x/sys/unix/zerrors_freebsd_arm64.go:1804:1: syntax error: non-declaration statement outside function body
 ...
 ```
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"html/template"
 	"io"
@@ -106,6 +107,16 @@ func runGrep(args []string) int {
 			names = splitOptions(opt.String())
 		default:
 			panic("unhandled option: -" + string(opt.Opt))
+		}
+	}
+
+	// read origins from stdin if it's not a tty
+	// this allows easy feeding origins from e.g. portgrep: `portgrep -u go -1 | fallout grep -C2 error:`
+	if !isatty.IsTerminal(os.Stdin.Fd()) {
+		sc := bufio.NewScanner(os.Stdin)
+		sc.Split(bufio.ScanWords)
+		for sc.Scan() {
+			origins = append(origins, sc.Text())
 		}
 	}
 
