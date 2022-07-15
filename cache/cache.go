@@ -36,6 +36,8 @@ type Entry interface {
 	With(wfn WithFunc) error
 	// Info return entry attributes.
 	Info() EntryInfo
+	// String returns entry string representation.
+	String() string
 }
 
 type WithFunc func(buf []byte) error

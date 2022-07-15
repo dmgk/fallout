@@ -154,6 +154,10 @@ func (e *DirectoryEntry) Info() EntryInfo {
 	}
 }
 
+func (e *DirectoryEntry) String() string {
+	return e.Path()
+}
+
 func (c *Directory) Walker(filter *Filter) Walker {
 	w := &DirectoryWalker{
 		cache: c,
