@@ -157,7 +157,7 @@ func runFetch(args []string) int {
 			return err
 		}
 
-		fmt.Fprintf(os.Stdout, "%s : %d bytes\n", res, len(res.Content))
+		fmt.Fprintf(os.Stdout, "%s : %s\n", res, formatSize(int64(len(res.Content))))
 		e, err := c.Entry(res.Builder, res.Origin, res.Timestamp)
 		if err != nil {
 			return err

@@ -81,6 +81,7 @@ var cmds = []*command{
 	&fetchCmd,
 	&grepCmd,
 	&cleanCmd,
+	&statsCmd,
 }
 
 func main() {
@@ -154,4 +155,20 @@ func splitOptions(s string) []string {
 	return strings.FieldsFunc(s, func(r rune) bool {
 		return unicode.IsSpace(r) || r == ','
 	})
+}
+
+func formatSize(size int64) string {
+	const suffixes = "KMG"
+	if size < 1000 {
+		return fmt.Sprintf("%dB", size)
+	}
+	fsize := float64(size)
+	var s rune
+	for _, s = range suffixes {
+		if fsize < 999999.0 {
+			break
+		}
+		fsize /= 1000.0
+	}
+	return fmt.Sprintf("%.1f %cB", fsize/1000.0, s)
 }
