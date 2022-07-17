@@ -11,10 +11,6 @@ import (
 	"github.com/dmgk/getopt"
 )
 
-const (
-	dateFormat = "2006-01-02"
-)
-
 var usageTmpl = template.Must(template.New("usage").Parse(`
 usage: {{.progname}} [-hV] [-M mode] [-G colors] command [options]
 
@@ -43,6 +39,7 @@ var (
 )
 
 const (
+	dateFormat      = "2006-01-02"
 	colorModeAuto   = "auto"
 	colorModeAlways = "always"
 	colorModeNever  = "never"
