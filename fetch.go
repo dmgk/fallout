@@ -41,7 +41,7 @@ const defaultFetchDaysLimit = 7
 var (
 	fetchCountLimit int
 	fetchDateLimit  = time.Now().UTC().AddDate(0, 0, -defaultFetchDaysLimit)
-	onlyNew         = true
+	fetchOnlyNew    = true
 )
 
 func showFetchUsage() {
@@ -75,20 +75,17 @@ func runFetch(args []string) int {
 		case 'D':
 			v, err := opt.Int()
 			if err != nil {
-				errExit(err.Error())
+				errExit("-D: %s", err)
 			}
 			fetchDateLimit = time.Now().UTC().AddDate(0, 0, -v)
-			onlyNew = false
+			fetchOnlyNew = false
 		case 'A':
-			t, err := time.Parse(dateFormat, opt.String())
+			t, err := parseDateTime(opt.String())
 			if err != nil {
-				errExit(err.Error())
-			}
-			if t.After(time.Now().UTC()) {
-				errExit("date in the future: %s", t.Format(dateFormat))
+				errExit("-A: %s", err)
 			}
 			fetchDateLimit = t
-			onlyNew = false
+			fetchOnlyNew = false
 		case 'N':
 			v, err := opt.Int()
 			if err != nil {
@@ -133,7 +130,7 @@ func runFetch(args []string) int {
 		Origins:    origins,
 		Names:      names,
 	}
-	if onlyNew && !c.Timestamp().IsZero() {
+	if fetchOnlyNew && !c.Timestamp().IsZero() {
 		fflt.After = c.Timestamp()
 	}
 
@@ -143,7 +140,7 @@ func runFetch(args []string) int {
 			return false, err
 		}
 		if e.Exists() {
-			if !onlyNew {
+			if !fetchOnlyNew {
 				fmt.Fprintf(os.Stdout, "%s (cached)\n", res)
 			}
 			return true, nil

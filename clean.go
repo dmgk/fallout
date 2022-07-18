@@ -32,7 +32,7 @@ const defaultCleanDaysLimit = 30
 
 var (
 	cleanDateLimit = time.Now().UTC().AddDate(0, 0, -defaultCleanDaysLimit)
-	allClean       bool
+	cleanAll       bool
 )
 
 func showCleanUsage() {
@@ -64,22 +64,21 @@ func runClean(args []string) int {
 			showCleanUsage()
 			os.Exit(0)
 		case 'x':
-			allClean = true
+			cleanAll = true
 		case 'D':
 			v, err := opt.Int()
 			if err != nil {
-				errExit(err.Error())
+				errExit("-D: %s", err)
 			}
 			cleanDateLimit = time.Now().UTC().AddDate(0, 0, -v)
 		case 'A':
-			t, err := time.Parse(dateFormat, opt.String())
+			t, err := parseDateTime(opt.String())
 			if err != nil {
-				errExit(err.Error())
-			}
-			if t.After(time.Now().UTC()) {
-				errExit("date in the future: %s", t.Format(dateFormat))
+				errExit("-A: %s", err)
 			}
 			cleanDateLimit = t
+		default:
+			panic("unhandled option: -" + string(opt.Opt))
 		}
 	}
 
@@ -88,7 +87,7 @@ func runClean(args []string) int {
 		errExit("error initializing cache: %s", err)
 	}
 
-	if allClean {
+	if cleanAll {
 		fmt.Printf("Removing %s\n", c.Path())
 		if err := c.Remove(); err != nil {
 			errExit("error removing cache: %s", err)

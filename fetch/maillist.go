@@ -109,8 +109,8 @@ func (f *Maillist) fetchMaillist(ctx context.Context, qfn QueryFunc, rch chan *R
 				ech <- err
 				return
 			}
-			mi := ts.UTC().Year()*100 + int(ts.UTC().Month())
-			ma := f.filter.After.UTC().Year()*100 + int(f.filter.After.UTC().Month())
+			mi := ts.Year()*100 + int(ts.Month())
+			ma := f.filter.After.Year()*100 + int(f.filter.After.Month())
 			if mi < ma {
 				cancel() // link is to the month before "After", stop
 				return
@@ -197,7 +197,7 @@ func (f *Maillist) fetchMaillist(ctx context.Context, qfn QueryFunc, rch chan *R
 					ech <- err
 					return
 				}
-				if ts.UTC().Before(f.filter.After.UTC()) {
+				if ts.Before(f.filter.After) {
 					return // timestamp is before "After", skip
 				}
 
@@ -213,7 +213,7 @@ func (f *Maillist) fetchMaillist(ctx context.Context, qfn QueryFunc, rch chan *R
 					resMap[url] = &Result{
 						Builder:   builder,
 						Origin:    origin,
-						Timestamp: ts.UTC(),
+						Timestamp: ts,
 						URL:       url,
 					}
 				}

@@ -292,6 +292,9 @@ func (w *DirectoryWalker) walkOrigin(builder, origin string, rch chan Entry, ech
 				ech <- err
 				continue
 			}
+			if ts.Before(w.filter.Since) || !w.filter.Before.IsZero() && ts.After(w.filter.Before) {
+				continue
+			}
 			e, err := newEntry(w.cache, builder, origin, ts)
 			if err != nil {
 				ech <- err
@@ -311,15 +314,15 @@ func loadTimestamp(path string) time.Time {
 	var zero time.Time
 	if buf, err := os.ReadFile(filepath.Join(path, cacheTimestampName)); err == nil {
 		if ts, err := time.Parse(cacheTimestampFormat, string(buf)); err == nil {
-			return ts.UTC()
+			return ts
 		}
 	}
 	return zero
 }
 
 func (c *Directory) updateTimestamp(ts time.Time) {
-	if ts.UTC().After(c.timestamp) {
-		c.timestamp = ts.UTC()
+	if ts.After(c.timestamp) {
+		c.timestamp = ts
 		_ = os.WriteFile(filepath.Join(c.path, cacheTimestampName), []byte(ts.Format(cacheTimestampFormat)), 0664)
 	}
 }

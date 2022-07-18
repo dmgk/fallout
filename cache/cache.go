@@ -62,6 +62,10 @@ type Filter struct {
 	Origins []string
 	// Allowed port names, partial names are ok.
 	Names []string
+	// Allow logs only since this timestamp.
+	Since time.Time
+	// Allow logs only before this timestamp.
+	Before time.Time
 }
 
 // Walker is the cache walker interface.

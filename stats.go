@@ -33,13 +33,13 @@ func showStatsUsage() {
 }
 
 var statsTmpl = template.Must(template.New("stats-output").Parse(`
-Cache size:         {{.logsSize}}
-Latest log:         {{.latestTimestamp}}
-Earliest log:       {{.earliestTimestamp}}
-Builders:           {{.buildersCount}}
-Failing ports:      {{.originsCount}}
-Logs:               {{.logsCount}}
-Most failures:      {{.topBuilderName}} ({{.topBuilderCount}} ports)
+Cache size:    {{.logsSize}}
+Latest log:    {{.latestTimestamp}}
+Oldest log:    {{.earliestTimestamp}}
+Builders:      {{.buildersCount}}
+Failing ports: {{.originsCount}}
+Logs:          {{.logsCount}}
+Most failures: {{.topBuilderName}} ({{.topBuilderCount}} ports)
 `[1:]))
 
 func runStats(args []string) int {

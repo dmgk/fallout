@@ -24,7 +24,10 @@ Commands (pass -h for command help):
   fetch           download fallout logs
   grep            search fallout logs
   clean           clean log cache
+  stats           show cache statistics
 ```
+
+##### Fetching failure logs:
 
 ```
 usage: fallout fetch [-h] [-D days] [-A date] [-N count] [-b builder[,builder]] [-c category[,category]] [-o origin[,origin]] [-n name[,name]]
@@ -42,8 +45,10 @@ Options:
   -n name,...     download only logs for these port names
 ```
 
+###### Searching:
+
 ```
-usage: fallout grep [-hFOl] [-A count] [-B count] [-C count] [-b builder[,builder]] [-c category[,category]] [-o origin[,origin]] [-n name[,name]] query [query ...]
+usage: fallout grep [-hFOl] [-A count] [-B count] [-C count] [-b builder[,builder]] [-c category[,category]] [-o origin[,origin]] [-n name[,name]] [-s since] [-e before] [-j jobs] query [query ...]
 
 Search cached fallout logs.
 
@@ -59,8 +64,12 @@ Options:
   -c category,... limit search only to these categories
   -o origin,...   limit search only to these origins
   -n name,...     limit search only to these port names
+  -s since        list only failures since this date or date-time, in RFC-3339 format
+  -e before       list only failures before this date or date-time, in RFC-3339 format
   -j jobs         number of parallel jobs, -j1 outputs sorted results (default: 8)
 ```
+
+##### Cleaning the cache:
 
 ```
 usage: fallout clean [-hx] [-D days] [-A date]

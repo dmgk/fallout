@@ -1,10 +1,12 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"html/template"
 	"os"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/dmgk/fallout/format"
@@ -152,6 +154,24 @@ func splitOptions(s string) []string {
 	return strings.FieldsFunc(s, func(r rune) bool {
 		return unicode.IsSpace(r) || r == ','
 	})
+}
+
+func parseDateTime(s string) (time.Time, error) {
+	var zero time.Time
+	formats := []string{
+		"2006-01-02",
+		"2006-01-02T15",
+		"2006-01-02T15:04",
+		"2006-01-02T15:04:05",
+		"2006-01-02T15:04:05Z",
+		time.RFC3339,
+	}
+	for _, f := range formats {
+		if ts, err := time.Parse(f, s); err == nil {
+			return ts, nil
+		}
+	}
+	return zero, errors.New("invalid date or datetime")
 }
 
 func formatSize(size int64) string {
