@@ -2,11 +2,11 @@
 
 Download and search FreeBSD build cluster fallout logs.
 
-#### Installation
+### Installation
 
     go install github.com/dmgk/fallout@latest
 
-#### Usage
+### Usage
 
 ```
 usage: fallout [-hV] [-M mode] [-G colors] command [options]
@@ -45,7 +45,7 @@ Options:
   -n name,...     download only logs for these port names
 ```
 
-###### Searching:
+##### Searching:
 
 ```
 usage: fallout grep [-hFOl] [-A count] [-B count] [-C count] [-b builder[,builder]] [-c category[,category]] [-o origin[,origin]] [-n name[,name]] [-s since] [-e before] [-j jobs] query [query ...]
@@ -83,7 +83,7 @@ Options:
   -A date     remove logs that are older than date, in RFC-3339 format (default: 2022-06-14)
 ```
 
-#### Examples:
+### Examples:
 
 Run `fallout fetch` to download recent logs and then:
 
