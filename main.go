@@ -112,7 +112,7 @@ func main() {
 			case colorModeAuto, colorModeNever, colorModeAlways:
 				colorMode = opt.String()
 			default:
-				errExit("invalid color mode: %s", opt.String())
+				errExit("-M: invalid color mode: %s", opt.String())
 			}
 		case 'G':
 			colors = opt.String()

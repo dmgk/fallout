@@ -129,7 +129,7 @@ func runGrep(args []string) int {
 		case 'j':
 			v, err := opt.Int()
 			if err != nil {
-				errExit(err.Error())
+				errExit("-j: %s", err.Error())
 			}
 			if v <= 0 {
 				v = 1

@@ -58,6 +58,8 @@ func runStats(args []string) int {
 		case 'h':
 			showStatsUsage()
 			os.Exit(0)
+		default:
+			panic("unhandled option: -" + string(opt.Opt))
 		}
 	}
 
